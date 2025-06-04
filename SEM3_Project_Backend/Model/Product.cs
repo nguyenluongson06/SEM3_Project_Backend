@@ -3,6 +3,7 @@
 public class Product
 {
     //format: 2 digit category + 5 digit product id
+    //e.g.: "AB12345"
     public required string Id { get; set; }
     
     public string? Name { get; set; }
@@ -16,4 +17,8 @@ public class Product
     
     //should be month(s)
     public int WarrantyPeriod { get; set; }
+    
+    //are these needed?
+    public ICollection<OrderItem>? OrderItems { get; set; }
+    public ICollection<ReturnOrReplacement>? ReturnOrReplacements { get; set; }
 }

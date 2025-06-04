@@ -20,11 +20,20 @@ public class Order
     
     public DateTime OrderDate { get; set; }
     
-    //should be 01, 02, ... depends on the numbers of delivery type possible
+    //should be 01, 02, ... depends on the numbers of delivery type possible; could change to enum
     public int DeliveryTypeId { get; set; } 
     
     public PaymentStatus PaymentStatus { get; set; }
     public DispatchStatus DispatchStatus { get; set; }
     public DateTime DeliveryDate { get; set; }
     public float TotalAmount { get; set; }
+    
+    //list of items in order
+    public ICollection<OrderItem>? OrderItems { get; set; }
+    
+    //linked payment
+    public Payment Payment { get; set; }
+    
+    //returns|replacements
+    public ICollection<ReturnOrReplacement>? ReturnOrReplacements { get; set; }
 }
