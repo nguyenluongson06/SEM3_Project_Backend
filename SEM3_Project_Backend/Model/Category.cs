@@ -1,4 +1,4 @@
-﻿namespace SEM3_Project_Backend.Models;
+﻿namespace SEM3_Project_Backend.Model;
 
 public class Category
 {
