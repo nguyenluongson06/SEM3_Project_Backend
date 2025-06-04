@@ -1,0 +1,25 @@
+﻿services:
+  sem3_project_backend:
+    image: sem3_project_backend
+    build:
+      context: .
+      dockerfile: SEM3_Project_Backend/Dockerfile
+    depends_on:
+      - sqlserver
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver-2022
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "admin@123"
+    ports:
+      - "1433:1433"
+    restart: always
+    healthcheck:
+      test: [ "CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "admin@123", "-Q", "SELECT 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+  
