@@ -9,6 +9,8 @@ public class Product
     public string? Name { get; set; }
     public string? Description { get; set; }
     public float Price { get; set; }
+    
+    //should be removed, use Inventory instead
     public int StockQuantity { get; set; }
     
     //many-1 category
@@ -21,4 +23,9 @@ public class Product
     //are these needed?
     public ICollection<OrderItem>? OrderItems { get; set; }
     public ICollection<ReturnOrReplacement>? ReturnOrReplacements { get; set; }
+    
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    //inventory item for inventory management
+    public InventoryItem? InventoryItem { get; set; }
 }

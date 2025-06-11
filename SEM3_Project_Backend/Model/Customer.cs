@@ -8,7 +8,9 @@ public class Customer
     public string? HashedPassword { get; set; }
     public string? PhoneNumber { get; set; }
     public string? Address { get; set; }
-    public DateTime RegistrationDate { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    //last created|modified time
+    public DateTime ModifiedAt { get; set; } = DateTime.Now;
     
     public ICollection<Order>? Orders { get; set; }
     public ICollection<Feedback>? Feedbacks { get; set; }

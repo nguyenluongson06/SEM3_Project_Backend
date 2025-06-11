@@ -24,6 +24,7 @@ public class Order
     public int DeliveryTypeId { get; set; } 
     
     public PaymentStatus PaymentStatus { get; set; }
+    //should be range?
     public DispatchStatus DispatchStatus { get; set; }
     public DateTime DeliveryDate { get; set; }
     public float TotalAmount { get; set; }

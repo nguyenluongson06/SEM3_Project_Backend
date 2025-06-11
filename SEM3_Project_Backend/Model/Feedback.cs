@@ -9,5 +9,5 @@ public class Feedback
     public Customer? Customer { get; set; }
     
     public string? Message { get; set; }
-    public DateTime CreatedDate { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

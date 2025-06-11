@@ -17,4 +17,6 @@ public class OrderItem
     
     //format: 1 digit delivery type + 7 digit product id + 8 digit padded order id
     public string? DisplayOrderId { get; set; }
+    
+    public DateTime CreatedAt { get; set; }
 }

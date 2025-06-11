@@ -2,9 +2,7 @@
 
 public enum PaymentType
 {
-    CreditCard,
-    Cheque, 
-    VPP
+    MoMo //support more payment type?
 }
 
 //temp class for payment info, subjected to change
@@ -18,9 +16,5 @@ public class Payment
     
     public PaymentType PaymentType { get; set; }
     public DateTime PaymentDate { get; set; }
-    
-    //should this be kept encrypted in DB or not kept at all?
-    public string? CardDetails { get; set; }
-    public string? ChequeDetails { get; set; }
     public PaymentStatus PaymentStatus { get; set; }
 }
