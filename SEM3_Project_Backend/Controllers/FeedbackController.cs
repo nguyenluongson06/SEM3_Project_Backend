@@ -3,21 +3,16 @@ using SEM3_Project_Backend.Data;
 using SEM3_Project_Backend.DTOs;
 using SEM3_Project_Backend.Model;
 
+namespace SEM3_Project_Backend.Controllers;
+
 [Route("api/[controller]")]
 [ApiController]
-public class FeedbackController : ControllerBase
+public class FeedbackController(AppDbContext context) : ControllerBase
 {
-    private readonly AppDbContext _context;
-
-    public FeedbackController(AppDbContext context)
-    {
-        _context = context;
-    }
-
     [HttpPost]
     public IActionResult SubmitFeedback(FeedbackRequest request)
     {
-        var hasOrdered = _context.Orders
+        var hasOrdered = context.Orders
             .Any(o => o.CustomerId == request.CustomerId &&
                       o.OrderItems!.Any(oi => oi.ProductId == request.ProductId));
 
@@ -26,15 +21,15 @@ public class FeedbackController : ControllerBase
         var feedback = new Feedback
         {
             CustomerId = request.CustomerId,
-            ProductId = request.ProductId,
+            //ProductId = request.ProductId, //feedback khong co productId, tam thoi nhan het toan bo feedback
             Message = request.Message,
-            Rating = request.Rating,
-            IsVisible = false,
+            //Rating = request.Rating, tam thoi chua co rating
+            //IsVisible = false, khong can, tam thoi chi la feedback luu o backend
             CreatedAt = DateTime.UtcNow
         };
 
-        _context.Feedbacks.Add(feedback);
-        _context.SaveChanges();
+        context.Feedbacks.Add(feedback);
+        context.SaveChanges();
 
         return Ok();
     }
@@ -42,15 +37,24 @@ public class FeedbackController : ControllerBase
     [HttpGet]
     public IActionResult GetFeedbacks()
     {
-        var feedbacks = _context.Feedbacks
-            .Where(f => f.IsVisible)
-            .Select(f => new {
-                f.ProductId,
-                f.Rating,
-                f.Message,
-                f.CreatedAt
-            }).ToList();
+        /*
+    var feedbacks = _context.Feedbacks
+        .Where(f => f.IsVisible)
+        .Select(f => new {
+            f.ProductId,
+            f.Rating,
+            f.Message,
+            f.CreatedAt
+        }).ToList();
+    */
 
+        var feedbacks = context.Feedbacks.Select(f => new
+        {
+            f.Customer!.Name,
+            f.Message,
+            f.CreatedAt,
+        }).ToList();
+        
         return Ok(feedbacks);
     }
 }

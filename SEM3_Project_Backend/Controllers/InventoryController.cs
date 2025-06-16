@@ -2,21 +2,16 @@ using Microsoft.AspNetCore.Mvc;
 using SEM3_Project_Backend.Data;
 using SEM3_Project_Backend.Model;
 
+namespace SEM3_Project_Backend.Controllers;
+
 [Route("api/[controller]")]
 [ApiController]
-public class InventoryController : ControllerBase
+public class InventoryController(AppDbContext context) : ControllerBase
 {
-    private readonly AppDbContext _context;
-
-    public InventoryController(AppDbContext context)
-    {
-        _context = context;
-    }
-
     [HttpGet("{productId}")]
     public IActionResult GetInventory(string productId)
     {
-        var item = _context.InventoryItems.FirstOrDefault(i => i.ProductId == productId);
+        var item = context.InventoryItems.FirstOrDefault(i => i.ProductId == productId);
         if (item == null) return NotFound();
         return Ok(new { item.ProductId, item.Quantity });
     }
@@ -24,7 +19,7 @@ public class InventoryController : ControllerBase
     [HttpPost("{productId}/add")]
     public IActionResult AddStock(string productId, int quantity)
     {
-        var item = _context.InventoryItems.FirstOrDefault(i => i.ProductId == productId);
+        var item = context.InventoryItems.FirstOrDefault(i => i.ProductId == productId);
         if (item == null)
         {
             item = new InventoryItem
@@ -33,25 +28,25 @@ public class InventoryController : ControllerBase
                 Quantity = quantity,
                 UpdatedAt = DateTime.UtcNow
             };
-            _context.InventoryItems.Add(item);
+            context.InventoryItems.Add(item);
         }
         else
         {
             item.Quantity += quantity;
             item.UpdatedAt = DateTime.UtcNow;
         }
-        _context.SaveChanges();
+        context.SaveChanges();
         return Ok(item);
     }
 
     [HttpPut("{productId}/update")]
     public IActionResult UpdateStock(string productId, int quantity)
     {
-        var item = _context.InventoryItems.FirstOrDefault(i => i.ProductId == productId);
+        var item = context.InventoryItems.FirstOrDefault(i => i.ProductId == productId);
         if (item == null) return NotFound();
         item.Quantity = quantity;
         item.UpdatedAt = DateTime.UtcNow;
-        _context.SaveChanges();
+        context.SaveChanges();
         return Ok(item);
     }
 }

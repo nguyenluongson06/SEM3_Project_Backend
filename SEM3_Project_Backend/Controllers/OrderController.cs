@@ -1,20 +1,17 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SEM3_Project_Backend.Data;
 using SEM3_Project_Backend.DTOs;
 using SEM3_Project_Backend.Model;
 
+namespace SEM3_Project_Backend.Controllers;
+
 [Route("api/[controller]")]
 [ApiController]
-public class OrderController : ControllerBase
+public class OrderController(AppDbContext context) : ControllerBase
 {
-    private readonly AppDbContext _context;
-
-    public OrderController(AppDbContext context)
-    {
-        _context = context;
-    }
-
     [HttpPost]
+    [Authorize(Roles = "Customer")]
     public IActionResult CreateOrder(OrderRequest request)
     {
         var order = new Order
@@ -30,10 +27,10 @@ public class OrderController : ControllerBase
         var orderItems = new List<OrderItem>();
         foreach (var item in request.Items)
         {
-            var product = _context.Products.FirstOrDefault(p => p.Id == item.ProductId);
+            var product = context.Products.FirstOrDefault(p => p.Id == item.ProductId);
             if (product == null) return BadRequest($"Product {item.ProductId} not found");
 
-            var inventory = _context.InventoryItems.FirstOrDefault(i => i.ProductId == item.ProductId);
+            var inventory = context.InventoryItems.FirstOrDefault(i => i.ProductId == item.ProductId);
             if (inventory == null || inventory.Quantity < item.Quantity)
                 return BadRequest($"Insufficient stock for {item.ProductId}");
 
@@ -51,8 +48,8 @@ public class OrderController : ControllerBase
         }
 
         order.OrderItems = orderItems;
-        _context.Orders.Add(order);
-        _context.SaveChanges();
+        context.Orders.Add(order);
+        context.SaveChanges();
 
         return Ok(order);
     }
@@ -60,14 +57,14 @@ public class OrderController : ControllerBase
     [HttpGet("user/{userId}")]
     public IActionResult GetOrdersByUser(int userId)
     {
-        var orders = _context.Orders.Where(o => o.CustomerId == userId).ToList();
+        var orders = context.Orders.Where(o => o.CustomerId == userId).ToList();
         return Ok(orders);
     }
 
     [HttpGet("{id}")]
     public IActionResult GetOrderById(int id)
     {
-        var order = _context.Orders
+        var order = context.Orders
             .Where(o => o.Id == id)
             .Select(o => new
             {
@@ -87,10 +84,10 @@ public class OrderController : ControllerBase
     [HttpDelete("{id}")]
     public IActionResult DeleteOrder(int id)
     {
-        var order = _context.Orders.FirstOrDefault(o => o.Id == id);
+        var order = context.Orders.FirstOrDefault(o => o.Id == id);
         if (order == null) return NotFound();
-        _context.Orders.Remove(order);
-        _context.SaveChanges();
+        context.Orders.Remove(order);
+        context.SaveChanges();
         return Ok();
     }
 }

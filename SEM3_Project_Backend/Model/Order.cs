@@ -1,4 +1,6 @@
-﻿namespace SEM3_Project_Backend.Model;
+﻿using System.Text;
+
+namespace SEM3_Project_Backend.Model;
 
 public enum PaymentStatus
 {
@@ -37,4 +39,15 @@ public class Order
     
     //returns|replacements
     public ICollection<ReturnOrReplacement>? ReturnOrReplacements { get; set; }
+
+    //return display id
+    public string GetDisplayId()
+    {
+        string result = $"{this.Id}";
+        while (result.Length < 8)
+        {
+            result = "0" + result;
+        }
+        return result;
+    }
 }

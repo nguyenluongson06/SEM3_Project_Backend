@@ -13,7 +13,7 @@ public class Payment
     //1-1 to order
     public int OrderId { get; set; }
     public Order? Order { get; set; }
-    
+    public float Amount { get; set; }
     public PaymentType PaymentType { get; set; }
     public DateTime PaymentDate { get; set; }
     public PaymentStatus PaymentStatus { get; set; }
