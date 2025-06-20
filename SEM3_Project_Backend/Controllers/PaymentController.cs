@@ -1,34 +1,91 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SEM3_Project_Backend.Data;
 using SEM3_Project_Backend.Model;
+using SEM3_Project_Backend.Service;
 
 namespace SEM3_Project_Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class PaymentController(AppDbContext context) : ControllerBase
+public class PaymentController(AppDbContext context, PaypalService paypalService) : ControllerBase
 {
-    [HttpPost]
-    [Authorize(Roles = "Customer")] // customers must be logged in
-    public async Task<IActionResult> CreatePayment([FromBody] Payment payment)
+    [HttpPost("start")]  // Start PayPal payment flow, add a Pending payment & return redirect URL
+    [Authorize]
+    public async Task<IActionResult> StartPayment([FromBody] StartPaymentRequest dto)
     {
-        /* TODO: Validate ownership or order status, then call the payment provider; create payment as pending, then if payment is cleared, change status to cleared, otherwise change to failed; create new payment & call back the payment provider each time new payment is requested by user
-        */
+        var order = await context.Orders.FindAsync(dto.OrderId);
+        if (order is not { DispatchStatus: DispatchStatus.Pending })
+            return BadRequest("Invalid or already processed order.");
+
+        var payment = new Payment
+        {
+            OrderId = order.Id,
+            PaymentType = PaymentType.PayPal,
+            PaymentStatus = PaymentStatus.Pending,
+            Amount = dto.Amount,
+            PaymentDate = DateTime.UtcNow
+        };
+
         context.Payments.Add(payment);
         await context.SaveChangesAsync();
-        return Ok(payment);
+
+        var payUrl = await paypalService.GenerateUrl(order, payment);
+        return Ok(new { payUrl });
     }
 
-    [HttpPut("{id}/status")]
-    [Authorize(Roles = "Admin")] //only admin can change payment status
-    public async Task<IActionResult> UpdatePaymentStatus(int id, [FromBody] string status)
+    [HttpPost("paypal/callback")] // Capture payment after return from PayPal
+    [AllowAnonymous]
+    public async Task<IActionResult> PayPalCallback([FromBody] PayPalCallbackRequest request)
     {
-        var payment = await context.Payments.FindAsync(id);
+        return await paypalService.VerifyCallback(request);
+    }
+
+    [HttpGet("status/{orderId:int}")] // Get payment status for UI with orderId
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPaymentStatus(int orderId)
+    {
+        var payment = await context.Payments
+            .Where(p => p.OrderId == orderId)
+            .OrderByDescending(p => p.PaymentDate)
+            .FirstOrDefaultAsync();
+
+        if (payment == null)
+            return NotFound();
+
+        return Ok(new
+        {
+            payment.OrderId,
+            payment.PaymentStatus,
+            payment.PaymentType,
+            payment.TransactionId
+        });
+    }
+
+    [HttpPut("{paymentId:int}/status")] // Manually update status (admin)
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateStatus(int paymentId, [FromBody] string status)
+    {
+        var payment = await context.Payments.FindAsync(paymentId);
         if (payment == null) return NotFound();
 
-        payment.PaymentStatus = Enum.Parse<PaymentStatus>(status);
+        if (!Enum.TryParse<PaymentStatus>(status, true, out var parsedStatus))
+            return BadRequest("Invalid status.");
+
+        payment.PaymentStatus = parsedStatus;
         await context.SaveChangesAsync();
         return Ok(payment);
     }
+}
+
+public class StartPaymentRequest
+{
+    public int OrderId { get; set; }
+    public float Amount { get; set; }
+}
+
+public class PayPalCallbackRequest
+{
+    public string PayPalToken { get; set; }
 }

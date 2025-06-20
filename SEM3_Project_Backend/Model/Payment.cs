@@ -2,7 +2,7 @@
 
 public enum PaymentType
 {
-    MoMo //support more payment type?
+    MoMo, PayPal //support more payment type?
 }
 
 //temp class for payment info, subjected to change
@@ -13,6 +13,7 @@ public class Payment
     //1-1 to order
     public int OrderId { get; set; }
     public Order? Order { get; set; }
+    public string TransactionId { get; set; } = string.Empty;
     public float Amount { get; set; }
     public PaymentType PaymentType { get; set; }
     public DateTime PaymentDate { get; set; }
