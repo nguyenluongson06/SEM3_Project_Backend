@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SEM3_Project_Backend.Data;
 using SEM3_Project_Backend.DTOs;
 using SEM3_Project_Backend.Model;
 
 namespace SEM3_Project_Backend.Controllers;
 
-[Route("api/[controller]")]
 [ApiController]
+[Route("api/[controller]")]
 public class OrderController(AppDbContext context) : ControllerBase
 {
     [HttpPost]
@@ -89,5 +90,75 @@ public class OrderController(AppDbContext context) : ControllerBase
         context.Orders.Remove(order);
         context.SaveChanges();
         return Ok();
+    }
+
+    // Customer: Cancel order if not dispatched
+    [HttpPut("{id}/cancel")]
+    [Authorize(Policy = "Customer")]
+    public IActionResult CancelOrder(string id)
+    {
+        var userId = User.Identity?.Name;
+        if (string.IsNullOrEmpty(userId)) return Unauthorized("User not authenticated.");
+        if (!int.TryParse(userId, out var parsedUserId)) return BadRequest("Invalid user ID format.");
+        var orderId = int.TryParse(id, out var parsedId) ? parsedId : 0;
+        var order = context.Orders.FirstOrDefault(o => o.Id == orderId && o.CustomerId == parsedUserId);
+        if (order == null) return NotFound();
+        if (order.DispatchStatus == DispatchStatus.Dispatched || order.DispatchStatus == DispatchStatus.Delivered)
+            return BadRequest("Order cannot be cancelled after dispatch.");
+        order.DispatchStatus = DispatchStatus.Cancelled;
+        context.SaveChanges();
+        return Ok(order);
+    }
+
+    // Admin: Filter orders by date and delivery type
+    [HttpGet]
+    [Authorize(Policy = "Admin")]
+    public IActionResult GetOrders([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate, [FromQuery] string? deliveryType)
+    {
+        var query = context.Orders.AsQueryable();
+        if (fromDate.HasValue)
+            query = query.Where(o => o.CreatedAt >= fromDate.Value);
+        if (toDate.HasValue)
+            query = query.Where(o => o.CreatedAt <= toDate.Value);
+        if (!string.IsNullOrEmpty(deliveryType))
+            query = query.Where(o => o.DeliveryType.ToString().Equals(deliveryType, StringComparison.CurrentCultureIgnoreCase));
+        var orders = query.Include(o => o.OrderItems).ToList();
+        return Ok(orders);
+    }
+
+    // Employee/Admin: Update order details
+    [HttpPut("{id}")]
+    [Authorize(Policy = "EmployeeOrAdmin")]
+    public IActionResult UpdateOrder(string id, [FromBody] Order updated)
+    {
+        if (updated == null || string.IsNullOrEmpty(id)) return BadRequest("Invalid order data.");
+
+        if (!int.TryParse(id, out var orderId)) return BadRequest("Invalid order ID format.");
+        var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == orderId);
+        if (order == null) return NotFound();
+        order.DeliveryAddress = updated.DeliveryAddress;
+        order.DeliveryType = updated.DeliveryType;
+        order.DispatchStatus = updated.DispatchStatus;
+        order.UpdatedAt = DateTime.UtcNow;
+        // Optionally update order items, etc.
+        context.SaveChanges();
+        return Ok(order);
+    }
+
+    // Employee: Update delivery status/report
+    [HttpPut("{id}/delivery")]
+    [Authorize(Policy = "Employee")]
+    public IActionResult UpdateDeliveryStatus(string id, [FromBody] string newStatus)
+    {
+        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(newStatus)) return BadRequest("Invalid order ID or status.");
+        if (!int.TryParse(id, out var orderId)) return BadRequest("Invalid order ID format.");
+        var order = context.Orders.FirstOrDefault(o => o.Id == orderId);
+        if (order == null) return NotFound();
+        if (!Enum.TryParse<DispatchStatus>(newStatus, true, out var parsedStatus))
+            return BadRequest("Invalid dispatch status.");
+        order.DispatchStatus = parsedStatus;
+        order.UpdatedAt = DateTime.UtcNow;
+        context.SaveChanges();
+        return Ok(order);
     }
 }

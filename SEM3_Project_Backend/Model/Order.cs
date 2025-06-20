@@ -9,34 +9,45 @@ public enum PaymentStatus
 
 public enum DispatchStatus
 {
-    Pending, Dispatched, Cleared
+    Pending, Dispatched, Delivered, Cancelled
+}
+
+public enum DeliveryType
+{
+    Standard, Express, SameDay
 }
 
 public class Order
 {
     //use simple numeric id, 8-digit order number is only used for frontend display
-    public int Id { get; set; } 
-    
+    public int Id { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+
     public int CustomerId { get; set; }
     public Customer? Customer { get; set; }
-    
+
     public DateTime OrderDate { get; set; }
+
+    //use enum above
+    public DeliveryType DeliveryType { get; set; }
     
-    //should be 01, 02, ... depends on the numbers of delivery type possible; could change to enum
-    public int DeliveryTypeId { get; set; } 
-    
+    //address should not be null, but can be empty
+    //if empty, it means customer has not set delivery address yet
+    public string DeliveryAddress { get; set; } = string.Empty;
     public PaymentStatus PaymentStatus { get; set; }
     //should be range?
     public DispatchStatus DispatchStatus { get; set; }
     public DateTime DeliveryDate { get; set; }
     public float TotalAmount { get; set; }
-    
+
     //list of items in order
     public ICollection<OrderItem>? OrderItems { get; set; }
-    
+
     //linked payment
     public Payment Payment { get; set; }
-    
+
     //returns|replacements
     public ICollection<ReturnOrReplacement>? ReturnOrReplacements { get; set; }
 

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SEM3_Project_Backend.Data;
 using SEM3_Project_Backend.Model;
@@ -17,6 +18,7 @@ public class InventoryController(AppDbContext context) : ControllerBase
     }
 
     [HttpPost("{productId}/add")]
+    [Authorize(Policy = "EmployeeOrAdmin")]
     public IActionResult AddStock(string productId, int quantity)
     {
         var item = context.InventoryItems.FirstOrDefault(i => i.ProductId == productId);
@@ -40,6 +42,7 @@ public class InventoryController(AppDbContext context) : ControllerBase
     }
 
     [HttpPut("{productId}/update")]
+    [Authorize(Policy = "EmployeeOrAdmin")]
     public IActionResult UpdateStock(string productId, int quantity)
     {
         var item = context.InventoryItems.FirstOrDefault(i => i.ProductId == productId);

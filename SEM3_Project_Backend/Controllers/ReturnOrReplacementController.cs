@@ -14,6 +14,8 @@ public class ReturnOrReplacementController(AppDbContext context) : ControllerBas
     [Authorize(Roles = "Customer")] //only customer can create feedbacks
     public async Task<IActionResult> CreateReturn([FromBody] ReturnOrReplacement request)
     {
+        request.RequestDate = DateTime.UtcNow;
+        request.ApprovalStatus = UserRequestApprovalStatus.Pending;
         context.ReturnOrReplacements.Add(request);
         await context.SaveChangesAsync();
         return Ok(request);
