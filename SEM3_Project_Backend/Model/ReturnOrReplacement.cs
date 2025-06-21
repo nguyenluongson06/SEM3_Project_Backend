@@ -15,6 +15,7 @@ public enum UserRequestApprovalStatus
 
 public class ReturnOrReplacement
 {
+    //TODO: should use DTO instead of model directly
     public int Id { get; set; }
     
     //1-1 order

@@ -13,7 +13,7 @@ public class OrderController(AppDbContext context) : ControllerBase
 {
     [HttpPost]
     [Authorize(Roles = "Customer")]
-    public IActionResult CreateOrder(OrderRequest request)
+    public IActionResult CreateOrder(OrderRequest request) //TODO: change to check user instead of getting user id from request
     {
         var order = new Order
         {
@@ -52,17 +52,32 @@ public class OrderController(AppDbContext context) : ControllerBase
         context.Orders.Add(order);
         context.SaveChanges();
 
-        return Ok(order);
+        return Ok(new {
+            order.Id,
+            order.CustomerId,
+            order.OrderDate,
+            order.TotalAmount,
+            Items = order.OrderItems.Select(i => new {
+                i.ProductId,
+                i.Quantity,
+                i.Price
+            })
+        });
     }
 
-    [HttpGet("user/{userId}")]
+    //TODO: change to user can get their own orders
+    [HttpGet("user/{userId}/orders")]
+    [Authorize(Roles = "Customer")]
     public IActionResult GetOrdersByUser(int userId)
     {
         var orders = context.Orders.Where(o => o.CustomerId == userId).ToList();
         return Ok(orders);
     }
 
+    //TODO: if user is customer, check order belongs to them
+    //admin/employee can get any order
     [HttpGet("{id}")]
+    [Authorize]
     public IActionResult GetOrderById(int id)
     {
         var order = context.Orders
@@ -73,7 +88,8 @@ public class OrderController(AppDbContext context) : ControllerBase
                 o.CustomerId,
                 o.OrderDate,
                 o.TotalAmount,
-                Items = o.OrderItems!.Select(i => new {
+                Items = o.OrderItems!.Select(i => new
+                {
                     i.ProductId,
                     i.Quantity,
                     i.Price
@@ -82,7 +98,10 @@ public class OrderController(AppDbContext context) : ControllerBase
         return order == null ? NotFound() : Ok(order);
     }
 
+    //TODO: if user is customer, check order belongs to them
+    //admin/employee can delete any order
     [HttpDelete("{id}")]
+    [Authorize]
     public IActionResult DeleteOrder(int id)
     {
         var order = context.Orders.FirstOrDefault(o => o.Id == id);
@@ -107,7 +126,17 @@ public class OrderController(AppDbContext context) : ControllerBase
             return BadRequest("Order cannot be cancelled after dispatch.");
         order.DispatchStatus = DispatchStatus.Cancelled;
         context.SaveChanges();
-        return Ok(order);
+        return Ok(new {
+    order.Id,
+    order.CustomerId,
+    order.OrderDate,
+    order.TotalAmount,
+    Items = order.OrderItems.Select(i => new {
+        i.ProductId,
+        i.Quantity,
+        i.Price
+    })
+});
     }
 
     // Admin: Filter orders by date and delivery type
@@ -142,7 +171,17 @@ public class OrderController(AppDbContext context) : ControllerBase
         order.UpdatedAt = DateTime.UtcNow;
         // Optionally update order items, etc.
         context.SaveChanges();
-        return Ok(order);
+        return Ok(new {
+    order.Id,
+    order.CustomerId,
+    order.OrderDate,
+    order.TotalAmount,
+    Items = order.OrderItems.Select(i => new {
+        i.ProductId,
+        i.Quantity,
+        i.Price
+    })
+});
     }
 
     // Employee: Update delivery status/report
@@ -159,6 +198,16 @@ public class OrderController(AppDbContext context) : ControllerBase
         order.DispatchStatus = parsedStatus;
         order.UpdatedAt = DateTime.UtcNow;
         context.SaveChanges();
-        return Ok(order);
+        return Ok(new {
+    order.Id,
+    order.CustomerId,
+    order.OrderDate,
+    order.TotalAmount,
+    Items = order.OrderItems.Select(i => new {
+        i.ProductId,
+        i.Quantity,
+        i.Price
+    })
+});
     }
 }

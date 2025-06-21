@@ -9,9 +9,7 @@ public class Product
     public string? Name { get; set; }
     public string? Description { get; set; }
     public float Price { get; set; }
-    
-    //should be removed, use Inventory instead
-    public int StockQuantity { get; set; }
+    public string? ImageUrl { get; set; }
     
     //many-1 category
     public int CategoryId { get; set; }

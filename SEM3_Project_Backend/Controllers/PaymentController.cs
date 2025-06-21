@@ -12,7 +12,7 @@ namespace SEM3_Project_Backend.Controllers;
 public class PaymentController(AppDbContext context, PaypalService paypalService) : ControllerBase
 {
     [HttpPost("start")]  // Start PayPal payment flow, add a Pending payment & return redirect URL
-    [Authorize]
+    [Authorize(Roles = "Customer")]
     public async Task<IActionResult> StartPayment([FromBody] StartPaymentRequest dto)
     {
         var order = await context.Orders.FindAsync(dto.OrderId);
@@ -87,5 +87,5 @@ public class StartPaymentRequest
 
 public class PayPalCallbackRequest
 {
-    public string PayPalToken { get; set; }
+    public required string Token { get; set; }
 }

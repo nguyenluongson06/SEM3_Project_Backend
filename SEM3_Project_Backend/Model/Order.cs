@@ -19,6 +19,7 @@ public enum DeliveryType
 
 public class Order
 {
+    //TODO: should use DTO instead of model directly
     //use simple numeric id, 8-digit order number is only used for frontend display
     public int Id { get; set; }
 
@@ -46,7 +47,7 @@ public class Order
     public ICollection<OrderItem>? OrderItems { get; set; }
 
     //linked payment
-    public Payment Payment { get; set; }
+    public Payment? Payment { get; set; }
 
     //returns|replacements
     public ICollection<ReturnOrReplacement>? ReturnOrReplacements { get; set; }

@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Admin> Admins { get; set; }
     public DbSet<Feedback> Feedbacks { get; set; }
     public DbSet<InventoryItem> InventoryItems { get; set; }
+    public DbSet<Category> Categories { get; set; }
     
     //relationships
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -122,5 +123,121 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(ii => ii.ProductId)
             .HasMaxLength(7)
             .IsFixedLength();
+    }
+}
+
+public static class DbSeeder
+{
+    public static void Seed(AppDbContext context)
+    {
+        // Only seed if DB is empty
+        if (!context.Admins.Any())
+        {
+            // Hashing function (same as in AuthController)
+            string HashPassword(string password)
+            {
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
+                return Convert.ToBase64String(bytes);
+            }
+
+            // Add admin
+            context.Admins.Add(new Admin
+            {
+                Username = "admin",
+                Password = HashPassword("admin123"),
+                Name = "Super Admin",
+                CreatedAt = DateTime.UtcNow
+            });
+
+            // Add employee
+            context.Employees.Add(new Employee
+            {
+                Username = "employee",
+                HashedPassword = HashPassword("employee123"),
+                Name = "Test Employee",
+                Role = "Employee",
+                CreatedAt = DateTime.UtcNow,
+                ModifiedAt = DateTime.UtcNow
+            });
+
+            // Add customer
+            context.Customers.Add(new Customer
+            {
+                Name = "Test Customer",
+                Email = "customer@example.com",
+                HashedPassword = HashPassword("customer123"),
+                PhoneNumber = "0123456789",
+                Address = "123 Test St",
+                CreatedAt = DateTime.UtcNow,
+                ModifiedAt = DateTime.UtcNow
+            });
+
+            context.SaveChanges();
+        }
+
+        // Seed categories if needed
+        if (!context.Categories.Any())
+        {
+            context.Categories.AddRange(
+                new Category { Name = "Ceramics", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow },
+                new Category { Name = "Bags", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow },
+                new Category { Name = "Art", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow },
+                new Category { Name = "Cosmetics", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow },
+                new Category { Name = "Accessories", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow }
+            );
+            context.SaveChanges();
+        }
+
+        // Seed products from CSV if needed
+        if (!context.Products.Any())
+        {
+            var categories = context.Categories.ToList();
+            var csvPath = Path.Combine(AppContext.BaseDirectory, "SeedData", "shop items.csv");
+            if (File.Exists(csvPath))
+            {
+                var csvLines = File.ReadAllLines(csvPath);
+                var catProductCounts = categories.ToDictionary(c => c.Id, c => 0);
+
+                for (int i = 1; i < csvLines.Length; i++)
+                {
+                    var parts = csvLines[i].Split(',');
+                    var name = parts[0];
+                    var imageUrl = parts.Length > 1 ? parts[1] : "";
+
+                    // Assign category by keyword
+                    var cat = categories.FirstOrDefault(c =>
+                        name.ToLower().Contains(c.Name!.ToLower().Split(' ')[0])) ?? categories[0];
+
+                    // Generate product ID: 2-char cat + 5-digit number
+                    catProductCounts[cat.Id]++;
+                    var catCode = cat.Name!.Length >= 2 ? cat.Name.Substring(0, 2).ToUpper() : "XX";
+                    var prodNum = catProductCounts[cat.Id];
+                    var prodId = $"{catCode}{prodNum:D5}";
+
+                    var product = new Product
+                    {
+                        Id = prodId,
+                        Name = name,
+                        Description = $"Sample description for {name}",
+                        Price = 10 + i * 2,
+                        ImageUrl = imageUrl,
+                        CategoryId = cat.Id,
+                        WarrantyPeriod = 12,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow,
+                        InventoryItem = new InventoryItem
+                        {
+                            ProductId = prodId,
+                            Quantity = 20 + i,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        }
+                    };
+                    context.Products.Add(product);
+                }
+                context.SaveChanges();
+            }
+        }
     }
 }

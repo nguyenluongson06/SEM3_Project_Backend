@@ -16,6 +16,7 @@ namespace SEM3_Project_Backend.Controllers;
 public class AuthController(AppDbContext context, IConfiguration config) : ControllerBase
 {
     [HttpPost("register/customer")]
+    [AllowAnonymous]
     public IActionResult RegisterCustomer([FromBody] RegisterRequest dto)
     {
         if (context.Customers.Any(c => c.Email == dto.Email))
@@ -86,8 +87,11 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
             return Ok(new { Token = GenerateJwtToken(emp.Username, emp.Role ?? "Employee") });
 
         var cus = context.Customers.FirstOrDefault(c => c.Email == dto.Username);
-        if (cus != null && VerifyPassword(dto.Password, cus.HashedPassword))
-            return Ok(new { Token = GenerateJwtToken(cus.Email, "Customer") });
+        if (cus != null && !string.IsNullOrEmpty(cus.HashedPassword) && VerifyPassword(dto.Password, cus.HashedPassword))
+        {
+            var email = cus.Email ?? string.Empty;
+            return Ok(new { Token = GenerateJwtToken(email, "Customer") });
+        }
 
         return Unauthorized("Invalid credentials");
     }
@@ -96,7 +100,12 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
     [Authorize]
     public IActionResult ChangePassword([FromBody] ChangePasswordRequest dto)
     {
-        var cus = context.Customers.FirstOrDefault(c => c.Email == dto.Username);
+        var currentUsername = User.Identity?.Name;
+        if (string.IsNullOrEmpty(currentUsername))
+            return Unauthorized();
+
+        // Try customer
+        var cus = context.Customers.FirstOrDefault(c => c.Email == currentUsername);
         if (cus != null && VerifyPassword(dto.OldPassword, cus.HashedPassword))
         {
             cus.HashedPassword = HashPassword(dto.NewPassword);
@@ -104,7 +113,8 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
             return Ok();
         }
 
-        var emp = context.Employees.FirstOrDefault(e => e.Username == dto.Username);
+        // Try employee
+        var emp = context.Employees.FirstOrDefault(e => e.Username == currentUsername);
         if (emp != null && VerifyPassword(dto.OldPassword, emp.HashedPassword))
         {
             emp.HashedPassword = HashPassword(dto.NewPassword);
@@ -112,7 +122,16 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
             return Ok();
         }
 
-        return BadRequest("Invalid username or password");
+        // Try admin
+        var admin = context.Admins.FirstOrDefault(a => a.Username == currentUsername);
+        if (admin != null && VerifyPassword(dto.OldPassword, admin.Password))
+        {
+            admin.Password = HashPassword(dto.NewPassword);
+            context.SaveChanges();
+            return Ok();
+        }
+
+        return BadRequest("Invalid credentials");
     }
 
     [HttpPost("admin/change-employee-password")]

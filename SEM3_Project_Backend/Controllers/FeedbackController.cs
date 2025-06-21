@@ -9,6 +9,8 @@ namespace SEM3_Project_Backend.Controllers;
 [ApiController]
 public class FeedbackController(AppDbContext context) : ControllerBase
 {
+    //TODO: use DTO instead of model directly
+    //TODO: add validation for request, only allow feedback from registered users who have purchased the product
     [HttpPost]
     public IActionResult SubmitFeedback(FeedbackRequest request)
     {

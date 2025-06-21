@@ -6,6 +6,8 @@
       dockerfile: SEM3_Project_Backend/Dockerfile
     depends_on:
       - sqlserver
+    ports:
+      - "8080:8080"
 
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
