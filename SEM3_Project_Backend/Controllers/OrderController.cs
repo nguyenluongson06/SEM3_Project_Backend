@@ -82,7 +82,7 @@ public class OrderController(AppDbContext context) : ControllerBase
         if (userId == null) return Unauthorized();
 
         var orders = context.Orders
-            .Include(o => o.OrderItems)
+            .Include(o => o.OrderItems!.Cast<OrderItem>())
             .ThenInclude(oi => oi.Product)
             .Where(o => o.CustomerId == userId.Value)
             .ToList()
@@ -98,7 +98,7 @@ public class OrderController(AppDbContext context) : ControllerBase
     public IActionResult GetOrders([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate, [FromQuery] string? deliveryType)
     {
         var query = context.Orders
-            .Include(o => o.OrderItems)
+            .Include(o => (IEnumerable<OrderItem>)o.OrderItems!)
             .ThenInclude(oi => oi.Product)
             .AsQueryable();
 
@@ -119,7 +119,7 @@ public class OrderController(AppDbContext context) : ControllerBase
     public IActionResult GetOrderById(int id)
     {
         var order = context.Orders
-            .Include(o => o.OrderItems)
+            .Include(o => (IEnumerable<OrderItem>)o.OrderItems!)
             .ThenInclude(oi => oi.Product)
             .FirstOrDefault(o => o.Id == id);
 
@@ -206,8 +206,8 @@ public class OrderController(AppDbContext context) : ControllerBase
         Id = order.Id,
         OrderDate = order.OrderDate,
         TotalAmount = order.TotalAmount,
-        PaymentStatus = order.PaymentStatus.ToString(),
-        DispatchStatus = order.DispatchStatus.ToString(),
+        PaymentStatus = order.PaymentStatus.ToString() ?? "Pending",
+        DispatchStatus = order.DispatchStatus.ToString() ?? "Pending",
         DeliveryDate = order.DeliveryDate,
         DeliveryAddress = order.DeliveryAddress,
         DeliveryType = order.DeliveryType.ToString(),

@@ -134,7 +134,6 @@ public static class DbSeeder
         // Only seed if DB is empty
         if (!context.Admins.Any())
         {
-            // Hashing function (same as in AuthController)
             string HashPassword(string password)
             {
                 using var sha = System.Security.Cryptography.SHA256.Create();
@@ -177,42 +176,63 @@ public static class DbSeeder
             context.SaveChanges();
         }
 
-        // Seed categories if needed
-        if (!context.Categories.Any())
+        // Seed categories and products from CSV if needed
+        var csvPath = Path.Combine(AppContext.BaseDirectory, "SeedData", "shop items.csv");
+        if (File.Exists(csvPath))
         {
-            context.Categories.AddRange(
-                new Category { Name = "Ceramics", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow },
-                new Category { Name = "Bags", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow },
-                new Category { Name = "Art", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow },
-                new Category { Name = "Cosmetics", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow },
-                new Category { Name = "Accessories", CreatedAt = DateTime.UtcNow, ModifiedAt = DateTime.UtcNow }
-            );
-            context.SaveChanges();
-        }
+            var csvLines = File.ReadAllLines(csvPath);
+            // Parse header
+            var header = csvLines[0].Split(',');
+            int catIdx = Array.FindIndex(header, h => h.Trim().ToLower().Contains("category"));
+            int nameIdx = Array.FindIndex(header, h => h.Trim().ToLower().Contains("name") && h.Trim().ToLower() != "category name");
+            int imgIdx = Array.FindIndex(header, h => h.Trim().ToLower().Contains("image"));
 
-        // Seed products from CSV if needed
-        if (!context.Products.Any())
-        {
-            var categories = context.Categories.ToList();
-            var csvPath = Path.Combine(AppContext.BaseDirectory, "SeedData", "shop items.csv");
-            if (File.Exists(csvPath))
+            // 1. Seed categories from CSV
+            var csvCategories = csvLines.Skip(1)
+                .Select(line => line.Split(',')[catIdx].Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Add missing categories
+            var existingCategories = context.Categories.ToList();
+            foreach (var catName in csvCategories)
             {
-                var csvLines = File.ReadAllLines(csvPath);
+                if (!existingCategories.Any(c => c.Name.Equals(catName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var newCat = new Category
+                    {
+                        Name = catName,
+                        CreatedAt = DateTime.UtcNow,
+                        ModifiedAt = DateTime.UtcNow
+                    };
+                    context.Categories.Add(newCat);
+                }
+            }
+            context.SaveChanges();
+
+            // Refresh categories with IDs
+            var categories = context.Categories.ToList();
+
+            // 2. Seed products from CSV
+            if (!context.Products.Any())
+            {
                 var catProductCounts = categories.ToDictionary(c => c.Id, c => 0);
 
                 for (int i = 1; i < csvLines.Length; i++)
                 {
                     var parts = csvLines[i].Split(',');
-                    var name = parts[0];
-                    var imageUrl = parts.Length > 1 ? parts[1] : "";
+                    var categoryName = parts[catIdx].Trim();
+                    var name = parts[nameIdx].Trim();
+                    var imageUrl = parts.Length > imgIdx ? parts[imgIdx].Trim() : "";
 
-                    // Assign category by keyword
+                    // Find category by name (case-insensitive)
                     var cat = categories.FirstOrDefault(c =>
-                        name.ToLower().Contains(c.Name!.ToLower().Split(' ')[0])) ?? categories[0];
+                        c.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
+                    if (cat == null) continue; // skip if category not found
 
                     // Generate product ID: 2-char cat + 5-digit number
                     catProductCounts[cat.Id]++;
-                    var catCode = cat.Name!.Length >= 2 ? cat.Name.Substring(0, 2).ToUpper() : "XX";
+                    var catCode = cat.Name.Length >= 2 ? cat.Name.Substring(0, 2).ToUpper() : "XX";
                     var prodNum = catProductCounts[cat.Id];
                     var prodId = $"{catCode}{prodNum:D5}";
 
