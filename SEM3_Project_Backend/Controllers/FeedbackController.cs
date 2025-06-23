@@ -1,7 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SEM3_Project_Backend.Data;
 using SEM3_Project_Backend.DTOs;
 using SEM3_Project_Backend.Model;
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 
 namespace SEM3_Project_Backend.Controllers;
 
@@ -9,24 +12,31 @@ namespace SEM3_Project_Backend.Controllers;
 [ApiController]
 public class FeedbackController(AppDbContext context) : ControllerBase
 {
-    //TODO: use DTO instead of model directly
-    //TODO: add validation for request, only allow feedback from registered users who have purchased the product
-    [HttpPost]
-    public IActionResult SubmitFeedback(FeedbackRequest request)
+    private int? GetUserId()
     {
+        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name;
+        return int.TryParse(userIdStr, out var id) ? id : null;
+    }
+
+    // Only allow feedback from registered users who have purchased the product
+    [HttpPost]
+    [Authorize(Roles = "Customer")]
+    public IActionResult SubmitFeedback([FromBody] FeedbackRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
         var hasOrdered = context.Orders
-            .Any(o => o.CustomerId == request.CustomerId &&
+            .Any(o => o.CustomerId == userId &&
                       o.OrderItems!.Any(oi => oi.ProductId == request.ProductId));
 
         if (!hasOrdered) return BadRequest("User must purchase product before submitting feedback");
 
         var feedback = new Feedback
         {
-            CustomerId = request.CustomerId,
-            //ProductId = request.ProductId, //feedback khong co productId, tam thoi nhan het toan bo feedback
+            CustomerId = userId.Value,
+            ProductId = request.ProductId,
             Message = request.Message,
-            //Rating = request.Rating, tam thoi chua co rating
-            //IsVisible = false, khong can, tam thoi chi la feedback luu o backend
             CreatedAt = DateTime.UtcNow
         };
 
@@ -36,27 +46,66 @@ public class FeedbackController(AppDbContext context) : ControllerBase
         return Ok();
     }
 
+    // Admin only: get all feedbacks, with filtering and pagination
     [HttpGet]
-    public IActionResult GetFeedbacks()
+    [Authorize(Roles = "Admin")]
+    public IActionResult GetFeedbacks(
+        [FromQuery] string? productId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
-        /*
-    var feedbacks = _context.Feedbacks
-        .Where(f => f.IsVisible)
-        .Select(f => new {
-            f.ProductId,
-            f.Rating,
-            f.Message,
-            f.CreatedAt
-        }).ToList();
-    */
+        var query = context.Feedbacks
+            .Include(f => f.Customer)
+            .AsQueryable();
 
-        var feedbacks = context.Feedbacks.Select(f => new
-        {
-            f.Customer!.Name,
-            f.Message,
-            f.CreatedAt,
-        }).ToList();
-        
+        if (!string.IsNullOrEmpty(productId))
+            query = query.Where(f => f.ProductId == productId);
+        if (fromDate.HasValue)
+            query = query.Where(f => f.CreatedAt >= fromDate.Value);
+        if (toDate.HasValue)
+            query = query.Where(f => f.CreatedAt <= toDate.Value);
+
+        var total = query.Count();
+        var feedbacks = query
+            .OrderByDescending(f => f.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(f => new FeedbackDTO
+            {
+                Id = f.Id,
+                CustomerName = f.Customer != null ? f.Customer.Name : string.Empty,
+                ProductId = f.ProductId,
+                Message = f.Message ?? string.Empty,
+                CreatedAt = f.CreatedAt
+            })
+            .ToList();
+
+        return Ok(new { total, feedbacks });
+    }
+
+    // Customer: get their own feedbacks
+    [HttpGet("my")]
+    [Authorize(Roles = "Customer")]
+    public IActionResult GetMyFeedbacks()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var feedbacks = context.Feedbacks
+            .Where(f => f.CustomerId == userId)
+            .OrderByDescending(f => f.CreatedAt)
+            .Select(f => new FeedbackDTO
+            {
+                Id = f.Id,
+                CustomerName = f.Customer != null ? f.Customer.Name : "",
+                ProductId = f.ProductId,
+                Message = f.Message ?? string.Empty,
+                CreatedAt = f.CreatedAt
+            })
+            .ToList();
+
         return Ok(feedbacks);
     }
 }

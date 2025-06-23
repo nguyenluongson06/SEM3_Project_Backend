@@ -9,6 +9,7 @@ namespace SEM3_Project_Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+//TODO: add auth to endpoints if needed, re-check roles and policies
 public class PaymentController(AppDbContext context, PaypalService paypalService) : ControllerBase
 {
     [HttpPost("start")]  // Start PayPal payment flow, add a Pending payment & return redirect URL

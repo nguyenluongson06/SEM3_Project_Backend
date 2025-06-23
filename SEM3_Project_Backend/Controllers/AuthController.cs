@@ -13,6 +13,7 @@ namespace SEM3_Project_Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+//TODO: add authorization to all endpoints, except register and login
 public class AuthController(AppDbContext context, IConfiguration config) : ControllerBase
 {
     [HttpPost("register/customer")]
@@ -106,7 +107,7 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
 
         // Try customer
         var cus = context.Customers.FirstOrDefault(c => c.Email == currentUsername);
-        if (cus != null && VerifyPassword(dto.OldPassword, cus.HashedPassword))
+        if (cus != null && !string.IsNullOrEmpty(cus.HashedPassword) && VerifyPassword(dto.OldPassword, cus.HashedPassword))
         {
             cus.HashedPassword = HashPassword(dto.NewPassword);
             context.SaveChanges();

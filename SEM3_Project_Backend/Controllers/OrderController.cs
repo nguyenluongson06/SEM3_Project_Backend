@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SEM3_Project_Backend.Data;
 using SEM3_Project_Backend.DTOs;
 using SEM3_Project_Backend.Model;
+using System.Security.Claims;
 
 namespace SEM3_Project_Backend.Controllers;
 
@@ -11,22 +12,39 @@ namespace SEM3_Project_Backend.Controllers;
 [Route("api/[controller]")]
 public class OrderController(AppDbContext context) : ControllerBase
 {
+    // Helper to get user id from JWT
+    private int? GetUserId()
+    {
+        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name;
+        return int.TryParse(userIdStr, out var id) ? id : null;
+    }
+
+    // Create order (Customer) - now uses OrderDTO as input
     [HttpPost]
     [Authorize(Roles = "Customer")]
-    public IActionResult CreateOrder(OrderRequest request) //TODO: change to check user instead of getting user id from request
+    public IActionResult CreateOrder([FromBody] OrderDTO dto)
     {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+        if (dto.Items == null || !dto.Items.Any())
+            return BadRequest("Order must contain at least one item.");
+
         var order = new Order
         {
-            CustomerId = request.CustomerId,
+            CustomerId = userId.Value,
             OrderDate = DateTime.UtcNow,
             TotalAmount = 0,
             PaymentStatus = PaymentStatus.Pending,
             DispatchStatus = DispatchStatus.Pending,
-            DeliveryDate = DateTime.UtcNow.AddDays(5)
+            DeliveryDate = DateTime.UtcNow.AddDays(5),
+            DeliveryAddress = dto.DeliveryAddress ?? string.Empty,
+            DeliveryType = Enum.TryParse<DeliveryType>(dto.DeliveryType, true, out var deliveryType) ? deliveryType : throw new ArgumentException("Invalid delivery type"),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
 
         var orderItems = new List<OrderItem>();
-        foreach (var item in request.Items)
+        foreach (var item in dto.Items)
         {
             var product = context.Products.FirstOrDefault(p => p.Id == item.ProductId);
             if (product == null) return BadRequest($"Product {item.ProductId} not found");
@@ -52,162 +70,153 @@ public class OrderController(AppDbContext context) : ControllerBase
         context.Orders.Add(order);
         context.SaveChanges();
 
-        return Ok(new {
-            order.Id,
-            order.CustomerId,
-            order.OrderDate,
-            order.TotalAmount,
-            Items = order.OrderItems.Select(i => new {
-                i.ProductId,
-                i.Quantity,
-                i.Price
-            })
-        });
+        return Ok(ToOrderDTO(order));
     }
 
-    //TODO: change to user can get their own orders
-    [HttpGet("user/{userId}/orders")]
+    // Get orders for current user (Customer)
+    [HttpGet("my")]
     [Authorize(Roles = "Customer")]
-    public IActionResult GetOrdersByUser(int userId)
+    public IActionResult GetMyOrders()
     {
-        var orders = context.Orders.Where(o => o.CustomerId == userId).ToList();
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var orders = context.Orders
+            .Include(o => o.OrderItems)
+            .ThenInclude(oi => oi.Product)
+            .Where(o => o.CustomerId == userId.Value)
+            .ToList()
+            .Select(ToOrderDTO)
+            .ToList();
+
         return Ok(orders);
     }
 
-    //TODO: if user is customer, check order belongs to them
-    //admin/employee can get any order
-    [HttpGet("{id}")]
-    [Authorize]
-    public IActionResult GetOrderById(int id)
-    {
-        var order = context.Orders
-            .Where(o => o.Id == id)
-            .Select(o => new
-            {
-                o.Id,
-                o.CustomerId,
-                o.OrderDate,
-                o.TotalAmount,
-                Items = o.OrderItems!.Select(i => new
-                {
-                    i.ProductId,
-                    i.Quantity,
-                    i.Price
-                })
-            }).FirstOrDefault();
-        return order == null ? NotFound() : Ok(order);
-    }
-
-    //TODO: if user is customer, check order belongs to them
-    //admin/employee can delete any order
-    [HttpDelete("{id}")]
-    [Authorize]
-    public IActionResult DeleteOrder(int id)
-    {
-        var order = context.Orders.FirstOrDefault(o => o.Id == id);
-        if (order == null) return NotFound();
-        context.Orders.Remove(order);
-        context.SaveChanges();
-        return Ok();
-    }
-
-    // Customer: Cancel order if not dispatched
-    [HttpPut("{id}/cancel")]
-    [Authorize(Policy = "Customer")]
-    public IActionResult CancelOrder(string id)
-    {
-        var userId = User.Identity?.Name;
-        if (string.IsNullOrEmpty(userId)) return Unauthorized("User not authenticated.");
-        if (!int.TryParse(userId, out var parsedUserId)) return BadRequest("Invalid user ID format.");
-        var orderId = int.TryParse(id, out var parsedId) ? parsedId : 0;
-        var order = context.Orders.FirstOrDefault(o => o.Id == orderId && o.CustomerId == parsedUserId);
-        if (order == null) return NotFound();
-        if (order.DispatchStatus == DispatchStatus.Dispatched || order.DispatchStatus == DispatchStatus.Delivered)
-            return BadRequest("Order cannot be cancelled after dispatch.");
-        order.DispatchStatus = DispatchStatus.Cancelled;
-        context.SaveChanges();
-        return Ok(new {
-    order.Id,
-    order.CustomerId,
-    order.OrderDate,
-    order.TotalAmount,
-    Items = order.OrderItems.Select(i => new {
-        i.ProductId,
-        i.Quantity,
-        i.Price
-    })
-});
-    }
-
-    // Admin: Filter orders by date and delivery type
+    // Get all orders (Admin/Employee)
     [HttpGet]
-    [Authorize(Policy = "Admin")]
+    [Authorize(Policy = "EmployeeOrAdmin")]
     public IActionResult GetOrders([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate, [FromQuery] string? deliveryType)
     {
-        var query = context.Orders.AsQueryable();
+        var query = context.Orders
+            .Include(o => o.OrderItems)
+            .ThenInclude(oi => oi.Product)
+            .AsQueryable();
+
         if (fromDate.HasValue)
             query = query.Where(o => o.CreatedAt >= fromDate.Value);
         if (toDate.HasValue)
             query = query.Where(o => o.CreatedAt <= toDate.Value);
         if (!string.IsNullOrEmpty(deliveryType))
-            query = query.Where(o => o.DeliveryType.ToString().Equals(deliveryType, StringComparison.CurrentCultureIgnoreCase));
-        var orders = query.Include(o => o.OrderItems).ToList();
+            query = query.Where(o => o.DeliveryType.ToString() == deliveryType);
+
+        var orders = query.ToList().Select(ToOrderDTO).ToList();
         return Ok(orders);
     }
 
-    // Employee/Admin: Update order details
-    [HttpPut("{id}")]
-    [Authorize(Policy = "EmployeeOrAdmin")]
-    public IActionResult UpdateOrder(string id, [FromBody] Order updated)
+    // Get order by id (Customer: only own, Employee/Admin: any)
+    [HttpGet("{id}")]
+    [Authorize]
+    public IActionResult GetOrderById(int id)
     {
-        if (updated == null || string.IsNullOrEmpty(id)) return BadRequest("Invalid order data.");
+        var order = context.Orders
+            .Include(o => o.OrderItems)
+            .ThenInclude(oi => oi.Product)
+            .FirstOrDefault(o => o.Id == id);
 
-        if (!int.TryParse(id, out var orderId)) return BadRequest("Invalid order ID format.");
-        var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == orderId);
         if (order == null) return NotFound();
-        order.DeliveryAddress = updated.DeliveryAddress;
-        order.DeliveryType = updated.DeliveryType;
-        order.DispatchStatus = updated.DispatchStatus;
-        order.UpdatedAt = DateTime.UtcNow;
-        // Optionally update order items, etc.
-        context.SaveChanges();
-        return Ok(new {
-    order.Id,
-    order.CustomerId,
-    order.OrderDate,
-    order.TotalAmount,
-    Items = order.OrderItems.Select(i => new {
-        i.ProductId,
-        i.Quantity,
-        i.Price
-    })
-});
+
+        var userId = GetUserId();
+        var isAdminOrEmployee = User.IsInRole("Admin") || User.IsInRole("Employee");
+        if (!isAdminOrEmployee && order.CustomerId != userId)
+            return Forbid();
+
+        return Ok(ToOrderDTO(order));
     }
 
-    // Employee: Update delivery status/report
-    [HttpPut("{id}/delivery")]
-    [Authorize(Policy = "Employee")]
-    public IActionResult UpdateDeliveryStatus(string id, [FromBody] string newStatus)
+    // Delete order (Customer: only own, Employee/Admin: any)
+    [HttpDelete("{id}")]
+    [Authorize]
+    public IActionResult DeleteOrder(int id)
     {
-        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(newStatus)) return BadRequest("Invalid order ID or status.");
-        if (!int.TryParse(id, out var orderId)) return BadRequest("Invalid order ID format.");
-        var order = context.Orders.FirstOrDefault(o => o.Id == orderId);
+        var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == id);
+        if (order == null) return NotFound();
+
+        var userId = GetUserId();
+        var isAdminOrEmployee = User.IsInRole("Admin") || User.IsInRole("Employee");
+        if (!isAdminOrEmployee && order.CustomerId != userId)
+            return Forbid();
+
+        context.Orders.Remove(order);
+        context.SaveChanges();
+        return Ok("Order deleted successfully.");
+    }
+
+    // Cancel order (Customer: only own, only if not dispatched)
+    [HttpPut("{id}/cancel")]
+    [Authorize(Roles = "Customer")]
+    public IActionResult CancelOrder(int id)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == id && o.CustomerId == userId);
+        if (order == null) return NotFound();
+        if (order.DispatchStatus == DispatchStatus.Dispatched || order.DispatchStatus == DispatchStatus.Delivered)
+            return BadRequest("Order cannot be cancelled after dispatch.");
+
+        order.DispatchStatus = DispatchStatus.Cancelled;
+        context.SaveChanges();
+        return Ok(ToOrderDTO(order));
+    }
+
+    // Update order details (Employee/Admin)
+    [HttpPut("{id}")]
+    [Authorize(Policy = "EmployeeOrAdmin")]
+    public IActionResult UpdateOrder(int id, [FromBody] OrderDTO updated)
+    {
+        var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == id);
+        if (order == null) return NotFound();
+
+        order.DeliveryAddress = updated.DeliveryAddress ?? order.DeliveryAddress;
+        order.DeliveryType = Enum.TryParse<DeliveryType>(updated.DeliveryType, true, out var deliveryType) ? deliveryType : order.DeliveryType;
+        order.DispatchStatus = Enum.TryParse<DispatchStatus>(updated.DispatchStatus, out var ds) ? ds : order.DispatchStatus;
+        order.UpdatedAt = DateTime.UtcNow;
+        context.SaveChanges();
+        return Ok(ToOrderDTO(order));
+    }
+
+    // Update delivery status/report (Employee)
+    [HttpPut("{id}/delivery")]
+    [Authorize(Roles = "Employee")]
+    public IActionResult UpdateDeliveryStatus(int id, [FromBody] string newStatus)
+    {
+        var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == id);
         if (order == null) return NotFound();
         if (!Enum.TryParse<DispatchStatus>(newStatus, true, out var parsedStatus))
             return BadRequest("Invalid dispatch status.");
         order.DispatchStatus = parsedStatus;
         order.UpdatedAt = DateTime.UtcNow;
         context.SaveChanges();
-        return Ok(new {
-    order.Id,
-    order.CustomerId,
-    order.OrderDate,
-    order.TotalAmount,
-    Items = order.OrderItems.Select(i => new {
-        i.ProductId,
-        i.Quantity,
-        i.Price
-    })
-});
+        return Ok(ToOrderDTO(order));
     }
+
+    // Helper: Map Order to OrderDTO
+    private static OrderDTO ToOrderDTO(Order order) => new()
+    {
+        Id = order.Id,
+        OrderDate = order.OrderDate,
+        TotalAmount = order.TotalAmount,
+        PaymentStatus = order.PaymentStatus.ToString(),
+        DispatchStatus = order.DispatchStatus.ToString(),
+        DeliveryDate = order.DeliveryDate,
+        DeliveryAddress = order.DeliveryAddress,
+        DeliveryType = order.DeliveryType.ToString(),
+        Items = order.OrderItems?.Select(i => new OrderItemDTO
+        {
+            ProductId = i.ProductId,
+            ProductName = i.Product?.Name,
+            Quantity = i.Quantity,
+            Price = i.Price
+        }).ToList() ?? new()
+    };
 }

@@ -126,6 +126,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     }
 }
 
+//TODO: add more info to seed data to avoid random category assignment and/or random info
 public static class DbSeeder
 {
     public static void Seed(AppDbContext context)

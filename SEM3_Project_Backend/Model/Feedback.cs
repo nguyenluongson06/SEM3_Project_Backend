@@ -3,6 +3,10 @@
 public class Feedback
 {
     public int Id { get; set; }
+
+    //1-1 product
+    public required string ProductId { get; set; }
+    public Product? Product { get; set; }
     
     //1-1 customer
     public int CustomerId { get; set; }

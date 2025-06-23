@@ -7,6 +7,7 @@ namespace SEM3_Project_Backend.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+//TODO: change all controllers to use DTOs
 public class InventoryController(AppDbContext context) : ControllerBase
 {
     [HttpGet("{productId}")]
