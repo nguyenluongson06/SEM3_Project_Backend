@@ -35,7 +35,7 @@ public class FeedbackController(AppDbContext context) : ControllerBase
         var feedback = new Feedback
         {
             CustomerId = userId.Value,
-            ProductId = request.ProductId,
+            ProductId = request.ProductId ?? string.Empty,
             Message = request.Message,
             CreatedAt = DateTime.UtcNow
         };

@@ -13,7 +13,6 @@ namespace SEM3_Project_Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-//TODO: add authorization to all endpoints, except register and login
 public class AuthController(AppDbContext context, IConfiguration config) : ControllerBase
 {
     [HttpPost("register/customer")]
@@ -36,6 +35,7 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
         return Ok();
     }
 
+    //(admin only) register employee
     [HttpPost("register/employee")]
     [Authorize(Roles = "Admin")]
     public IActionResult RegisterEmployee([FromBody] RegisterRequest dto)
@@ -48,7 +48,6 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
             Username = dto.Username,
             HashedPassword = HashPassword(dto.Password),
             Name = dto.Name,
-            Role = dto.Role ?? "Employee",
             CreatedAt = DateTime.UtcNow,
             ModifiedAt = DateTime.UtcNow
         };
@@ -57,6 +56,7 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
         return Ok();
     }
 
+    // (admin only) register admin
     [HttpPost("register/admin")]
     [Authorize(Roles = "Admin")]
     public IActionResult RegisterAdmin([FromBody] RegisterRequest dto)
@@ -76,7 +76,10 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
         return Ok();
     }
 
+    // login for customer, employee, or admin
+    // customer uses email as username
     [HttpPost("login")]
+    [AllowAnonymous]
     public IActionResult Login([FromBody] LoginRequest dto)
     {
         var admin = context.Admins.FirstOrDefault(a => a.Username == dto.Username);
@@ -85,7 +88,7 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
 
         var emp = context.Employees.FirstOrDefault(e => e.Username == dto.Username);
         if (emp != null && VerifyPassword(dto.Password, emp.HashedPassword))
-            return Ok(new { Token = GenerateJwtToken(emp.Username, emp.Role ?? "Employee") });
+            return Ok(new { Token = GenerateJwtToken(emp.Username, "Employee") });
 
         var cus = context.Customers.FirstOrDefault(c => c.Email == dto.Username);
         if (cus != null && !string.IsNullOrEmpty(cus.HashedPassword) && VerifyPassword(dto.Password, cus.HashedPassword))
@@ -97,6 +100,7 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
         return Unauthorized("Invalid credentials");
     }
 
+    // change password for customer, employee, or admin
     [HttpPost("change-password")]
     [Authorize]
     public IActionResult ChangePassword([FromBody] ChangePasswordRequest dto)
@@ -105,43 +109,51 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
         if (string.IsNullOrEmpty(currentUsername))
             return Unauthorized();
 
-        // Try customer
-        var cus = context.Customers.FirstOrDefault(c => c.Email == currentUsername);
-        if (cus != null && !string.IsNullOrEmpty(cus.HashedPassword) && VerifyPassword(dto.OldPassword, cus.HashedPassword))
+        // Check role from JWT
+        if (User.IsInRole("Customer"))
         {
-            cus.HashedPassword = HashPassword(dto.NewPassword);
-            context.SaveChanges();
-            return Ok();
+            var cus = context.Customers.FirstOrDefault(c => c.Email == currentUsername);
+            if (cus != null && !string.IsNullOrEmpty(cus.HashedPassword) && VerifyPassword(dto.OldPassword, cus.HashedPassword))
+            {
+                cus.HashedPassword = HashPassword(dto.NewPassword);
+                context.SaveChanges();
+                return Ok();
+            }
         }
-
-        // Try employee
-        var emp = context.Employees.FirstOrDefault(e => e.Username == currentUsername);
-        if (emp != null && VerifyPassword(dto.OldPassword, emp.HashedPassword))
+        else if (User.IsInRole("Employee"))
         {
-            emp.HashedPassword = HashPassword(dto.NewPassword);
-            context.SaveChanges();
-            return Ok();
+            var emp = context.Employees.FirstOrDefault(e => e.Username == currentUsername);
+            if (emp != null && VerifyPassword(dto.OldPassword, emp.HashedPassword))
+            {
+                emp.HashedPassword = HashPassword(dto.NewPassword);
+                context.SaveChanges();
+                return Ok();
+            }
         }
-
-        // Try admin
-        var admin = context.Admins.FirstOrDefault(a => a.Username == currentUsername);
-        if (admin != null && VerifyPassword(dto.OldPassword, admin.Password))
+        else if (User.IsInRole("Admin"))
         {
-            admin.Password = HashPassword(dto.NewPassword);
-            context.SaveChanges();
-            return Ok();
+            var admin = context.Admins.FirstOrDefault(a => a.Username == currentUsername);
+            if (admin != null && VerifyPassword(dto.OldPassword, admin.Password))
+            {
+                admin.Password = HashPassword(dto.NewPassword);
+                context.SaveChanges();
+                return Ok();
+            }
         }
 
         return BadRequest("Invalid credentials");
     }
 
+    //(admin only) change employee password
     [HttpPost("admin/change-employee-password")]
     [Authorize(Roles = "Admin")]
-    public IActionResult AdminChangeEmployeePassword([FromBody] RegisterRequest dto)
+    public IActionResult AdminChangeEmployeePassword([FromBody] ChangePasswordRequest dto)
     {
         var emp = context.Employees.FirstOrDefault(e => e.Username == dto.Username);
         if (emp == null) return NotFound();
-        emp.HashedPassword = HashPassword(dto.Password);
+        if (!VerifyPassword(dto.OldPassword, emp.HashedPassword))
+            return BadRequest("Old password is incorrect");
+        emp.HashedPassword = HashPassword(dto.NewPassword);
         context.SaveChanges();
         return Ok();
     }
@@ -158,7 +170,7 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
     [Authorize(Roles = "Admin")]
     public IActionResult GetEmployees()
     {
-        var employees = context.Employees.Select(e => new { e.Id, e.Username, e.Name, e.Role }).ToList();
+        var employees = context.Employees.Select(e => new { e.Id, e.Username, e.Name }).ToList();
         return Ok(employees);
     }
 

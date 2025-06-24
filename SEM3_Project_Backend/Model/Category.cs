@@ -6,4 +6,7 @@ public class Category
     public string? Name { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime ModifiedAt { get; set; } = DateTime.Now;
+
+    // Add this navigation property
+    public ICollection<Product>? Products { get; set; }
 }

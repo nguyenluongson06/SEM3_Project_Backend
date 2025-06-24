@@ -7,7 +7,6 @@ public class Employee
     public required string Username { get; set; }
     public required string HashedPassword { get; set; }
     public string? Name { get; set; }
-    public string? Role { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime ModifiedAt { get; set; } = DateTime.Now;
 }

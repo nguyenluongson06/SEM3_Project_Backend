@@ -123,6 +123,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(ii => ii.ProductId)
             .HasMaxLength(7)
             .IsFixedLength();
+
+        // Category → Products (one-to-many)
+        modelBuilder.Entity<Category>()
+            .HasMany(c => c.Products)
+            .WithOne(p => p.Category)
+            .HasForeignKey(p => p.CategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -156,7 +163,6 @@ public static class DbSeeder
                 Username = "employee",
                 HashedPassword = HashPassword("employee123"),
                 Name = "Test Employee",
-                Role = "Employee",
                 CreatedAt = DateTime.UtcNow,
                 ModifiedAt = DateTime.UtcNow
             });
@@ -197,7 +203,7 @@ public static class DbSeeder
             var existingCategories = context.Categories.ToList();
             foreach (var catName in csvCategories)
             {
-                if (!existingCategories.Any(c => c.Name.Equals(catName, StringComparison.OrdinalIgnoreCase)))
+                if (!existingCategories.Any(c => c.Name != null && c.Name.Equals(catName, StringComparison.OrdinalIgnoreCase)))
                 {
                     var newCat = new Category
                     {
@@ -227,12 +233,14 @@ public static class DbSeeder
 
                     // Find category by name (case-insensitive)
                     var cat = categories.FirstOrDefault(c =>
-                        c.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
+                        c.Name != null && c.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
                     if (cat == null) continue; // skip if category not found
 
                     // Generate product ID: 2-char cat + 5-digit number
                     catProductCounts[cat.Id]++;
-                    var catCode = cat.Name.Length >= 2 ? cat.Name.Substring(0, 2).ToUpper() : "XX";
+                    var catCode = !string.IsNullOrEmpty(cat.Name) && cat.Name.Length >= 2
+                        ? cat.Name[..2].ToUpper()
+                        : "XX";
                     var prodNum = catProductCounts[cat.Id];
                     var prodId = $"{catCode}{prodNum:D5}";
 
