@@ -49,7 +49,7 @@ public class CategoryController(AppDbContext context) : ControllerBase
     }
 
     // Add new category (employee/admin)
-    [HttpPost]
+    [HttpPost("add")]
     [Authorize(Policy = "EmployeeOrAdmin")]
     public IActionResult AddCategory([FromBody] CategoryDTO dto)
     {

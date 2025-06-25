@@ -12,13 +12,7 @@ namespace SEM3_Project_Backend.Controllers;
 [Route("api/[controller]")]
 public class OrderController(AppDbContext context) : ControllerBase
 {
-    // Helper to get user id from JWT
-    private int? GetUserId()
-    {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name;
-        return int.TryParse(userIdStr, out var id) ? id : null;
-    }
-
+    // Helper to get user email from JWT
     private string? GetCurrentUserEmail()
     {
         return User.Identity?.Name;
@@ -30,7 +24,6 @@ public class OrderController(AppDbContext context) : ControllerBase
     public IActionResult CreateOrder([FromBody] OrderDTO dto)
     {
         var email = GetCurrentUserEmail();
-    
 
         if (dto == null)
         {
@@ -113,38 +106,20 @@ public class OrderController(AppDbContext context) : ControllerBase
     [Authorize(Roles = "Customer")]
     public IActionResult GetMyOrders()
     {
-        var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        var email = GetCurrentUserEmail();
+        if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+        var customer = context.Customers.FirstOrDefault(c => c.Email == email);
+        if (customer == null) return Unauthorized();
 
         var orders = context.Orders
-            .Include(o => o.OrderItems!.Cast<OrderItem>())
+            .Include(o => o.OrderItems)
             .ThenInclude(oi => oi.Product)
-            .Where(o => o.CustomerId == userId.Value)
+            .Where(o => o.CustomerId == customer.Id)
             .ToList()
             .Select(ToOrderDTO)
             .ToList();
 
-        return Ok(orders);
-    }
-
-    // Get all orders (Admin/Employee)
-    [HttpGet]
-    [Authorize(Policy = "EmployeeOrAdmin")]
-    public IActionResult GetOrders([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate, [FromQuery] string? deliveryType)
-    {
-        var query = context.Orders
-            .Include(o => (IEnumerable<OrderItem>)o.OrderItems!)
-            .ThenInclude(oi => oi.Product)
-            .AsQueryable();
-
-        if (fromDate.HasValue)
-            query = query.Where(o => o.CreatedAt >= fromDate.Value);
-        if (toDate.HasValue)
-            query = query.Where(o => o.CreatedAt <= toDate.Value);
-        if (!string.IsNullOrEmpty(deliveryType))
-            query = query.Where(o => o.DeliveryType.ToString() == deliveryType);
-
-        var orders = query.ToList().Select(ToOrderDTO).ToList();
         return Ok(orders);
     }
 
@@ -154,16 +129,21 @@ public class OrderController(AppDbContext context) : ControllerBase
     public IActionResult GetOrderById(int id)
     {
         var order = context.Orders
-            .Include(o => (IEnumerable<OrderItem>)o.OrderItems!)
+            .Include(o => o.OrderItems)
             .ThenInclude(oi => oi.Product)
             .FirstOrDefault(o => o.Id == id);
 
         if (order == null) return NotFound();
 
-        var userId = GetUserId();
         var isAdminOrEmployee = User.IsInRole("Admin") || User.IsInRole("Employee");
-        if (!isAdminOrEmployee && order.CustomerId != userId)
-            return Forbid();
+        if (!isAdminOrEmployee)
+        {
+            var email = GetCurrentUserEmail();
+            if (string.IsNullOrEmpty(email)) return Unauthorized();
+            var customer = context.Customers.FirstOrDefault(c => c.Email == email);
+            if (customer == null || order.CustomerId != customer.Id)
+                return Forbid();
+        }
 
         return Ok(ToOrderDTO(order));
     }
@@ -176,10 +156,15 @@ public class OrderController(AppDbContext context) : ControllerBase
         var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == id);
         if (order == null) return NotFound();
 
-        var userId = GetUserId();
         var isAdminOrEmployee = User.IsInRole("Admin") || User.IsInRole("Employee");
-        if (!isAdminOrEmployee && order.CustomerId != userId)
-            return Forbid();
+        if (!isAdminOrEmployee)
+        {
+            var email = GetCurrentUserEmail();
+            if (string.IsNullOrEmpty(email)) return Unauthorized();
+            var customer = context.Customers.FirstOrDefault(c => c.Email == email);
+            if (customer == null || order.CustomerId != customer.Id)
+                return Forbid();
+        }
 
         context.Orders.Remove(order);
         context.SaveChanges();
@@ -191,10 +176,13 @@ public class OrderController(AppDbContext context) : ControllerBase
     [Authorize(Roles = "Customer")]
     public IActionResult CancelOrder(int id)
     {
-        var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        var email = GetCurrentUserEmail();
+        if (string.IsNullOrEmpty(email)) return Unauthorized();
 
-        var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == id && o.CustomerId == userId);
+        var customer = context.Customers.FirstOrDefault(c => c.Email == email);
+        if (customer == null) return Unauthorized();
+
+        var order = context.Orders.Include(o => o.OrderItems).FirstOrDefault(o => o.Id == id && o.CustomerId == customer.Id);
         if (order == null) return NotFound();
         if (order.DispatchStatus == DispatchStatus.Dispatched || order.DispatchStatus == DispatchStatus.Delivered)
             return BadRequest("Order cannot be cancelled after dispatch.");
