@@ -200,6 +200,7 @@ public static class DbSeeder
                 .ToList();
 
             // Add missing categories
+            var defaultCatImg = "https://d2opxh93rbxzdn.cloudfront.net/original/2X/4/40cfa8ca1f24ac29cfebcb1460b5cafb213b6105.png";
             var existingCategories = context.Categories.ToList();
             foreach (var catName in csvCategories)
             {
@@ -208,6 +209,7 @@ public static class DbSeeder
                     var newCat = new Category
                     {
                         Name = catName,
+                        ImageUrl = defaultCatImg,
                         CreatedAt = DateTime.UtcNow,
                         ModifiedAt = DateTime.UtcNow
                     };

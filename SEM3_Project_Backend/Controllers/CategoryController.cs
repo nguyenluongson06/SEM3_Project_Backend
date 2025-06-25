@@ -20,7 +20,8 @@ public class CategoryController(AppDbContext context) : ControllerBase
             .Select(c => new CategoryDTO
             {
                 Id = c.Id,
-                Name = c.Name,
+                Name = c.Name ?? "",
+                ImageUrl = c.ImageUrl,
                 CreatedAt = c.CreatedAt,
                 ModifiedAt = c.ModifiedAt
             })
@@ -38,7 +39,8 @@ public class CategoryController(AppDbContext context) : ControllerBase
             .Select(c => new CategoryDTO
             {
                 Id = c.Id,
-                Name = c.Name,
+                Name = c.Name ?? "",
+                ImageUrl = c.ImageUrl,
                 CreatedAt = c.CreatedAt,
                 ModifiedAt = c.ModifiedAt
             })
@@ -54,12 +56,15 @@ public class CategoryController(AppDbContext context) : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Name))
             return BadRequest("Category name is required.");
 
-        if (context.Categories.Any(c => c.Name.ToLower() == dto.Name.ToLower()))
+        if (context.Categories.Any(c => c.Name != null && c.Name.ToLower() == dto.Name.ToLower()))
             return BadRequest("Category already exists.");
 
         var cat = new Category
         {
             Name = dto.Name.Trim(),
+            ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl)
+                ? "https://d2opxh93rbxzdn.cloudfront.net/original/2X/4/40cfa8ca1f24ac29cfebcb1460b5cafb213b6105.png"
+                : dto.ImageUrl,
             CreatedAt = DateTime.UtcNow,
             ModifiedAt = DateTime.UtcNow
         };
@@ -67,6 +72,7 @@ public class CategoryController(AppDbContext context) : ControllerBase
         context.SaveChanges();
 
         dto.Id = cat.Id;
+        dto.ImageUrl = cat.ImageUrl;
         dto.CreatedAt = cat.CreatedAt;
         dto.ModifiedAt = cat.ModifiedAt;
         return Ok(dto);
@@ -82,13 +88,16 @@ public class CategoryController(AppDbContext context) : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(dto.Name))
             cat.Name = dto.Name.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.ImageUrl))
+            cat.ImageUrl = dto.ImageUrl;
         cat.ModifiedAt = DateTime.UtcNow;
 
         context.SaveChanges();
         return Ok(new CategoryDTO
         {
             Id = cat.Id,
-            Name = cat.Name,
+            Name = cat.Name ?? "",
+            ImageUrl = cat.ImageUrl,
             CreatedAt = cat.CreatedAt,
             ModifiedAt = cat.ModifiedAt
         });
