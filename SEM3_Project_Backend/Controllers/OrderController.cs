@@ -19,19 +19,45 @@ public class OrderController(AppDbContext context) : ControllerBase
         return int.TryParse(userIdStr, out var id) ? id : null;
     }
 
-    // Create order (Customer) - now uses OrderDTO as input
+    private string? GetCurrentUserEmail()
+    {
+        return User.Identity?.Name;
+    }
+
+    // Create order (Customer)
     [HttpPost]
     [Authorize(Roles = "Customer")]
     public IActionResult CreateOrder([FromBody] OrderDTO dto)
     {
-        var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        var email = GetCurrentUserEmail();
+    
+
+        if (dto == null)
+        {
+            return BadRequest("Order data is required.");
+        }
+
+        if (string.IsNullOrEmpty(email))
+        {
+            return Unauthorized();
+        }
+
+        var customer = context.Customers.FirstOrDefault(c => c.Email == email);
+        if (customer == null)
+        {
+            return Unauthorized();
+        }
+
+        var userId = customer.Id;
+
         if (dto.Items == null || !dto.Items.Any())
+        {
             return BadRequest("Order must contain at least one item.");
+        }
 
         var order = new Order
         {
-            CustomerId = userId.Value,
+            CustomerId = userId,
             OrderDate = DateTime.UtcNow,
             TotalAmount = 0,
             PaymentStatus = PaymentStatus.Pending,
@@ -47,11 +73,18 @@ public class OrderController(AppDbContext context) : ControllerBase
         foreach (var item in dto.Items)
         {
             var product = context.Products.FirstOrDefault(p => p.Id == item.ProductId);
-            if (product == null) return BadRequest($"Product {item.ProductId} not found");
+            if (product == null)
+            {
+                Console.WriteLine($"[DEBUG] Product not found: {item.ProductId}");
+                return BadRequest($"Product {item.ProductId} not found");
+            }
 
             var inventory = context.InventoryItems.FirstOrDefault(i => i.ProductId == item.ProductId);
             if (inventory == null || inventory.Quantity < item.Quantity)
+            {
+                Console.WriteLine($"[DEBUG] Insufficient stock for {item.ProductId}");
                 return BadRequest($"Insufficient stock for {item.ProductId}");
+            }
 
             inventory.Quantity -= item.Quantity;
 
@@ -69,6 +102,8 @@ public class OrderController(AppDbContext context) : ControllerBase
         order.OrderItems = orderItems;
         context.Orders.Add(order);
         context.SaveChanges();
+
+        Console.WriteLine($"[DEBUG] Order created successfully for customer {email} (ID: {userId})");
 
         return Ok(ToOrderDTO(order));
     }
