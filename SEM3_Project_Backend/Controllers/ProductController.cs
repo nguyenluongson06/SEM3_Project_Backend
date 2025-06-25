@@ -60,6 +60,39 @@ public class ProductController(AppDbContext context) : ControllerBase
         return product == null ? NotFound() : Ok(product);
     }
 
+    // Public: Get products by price range
+    [HttpGet("price")]
+    [AllowAnonymous]
+    public IActionResult GetProductsByPrice([FromQuery] float? min, [FromQuery] float? max)
+    {
+        var query = context.Products
+            .Include(p => p.Category)
+            .Include(p => p.InventoryItem)
+            .AsQueryable();
+
+        if (min.HasValue)
+            query = query.Where(p => p.Price >= min.Value);
+        if (max.HasValue)
+            query = query.Where(p => p.Price <= max.Value);
+
+        var products = query
+            .Select(p => new ProductDTO
+            {
+                Id = p.Id,
+                Name = p.Name ?? "",
+                Description = p.Description,
+                Price = p.Price,
+                ImageUrl = p.ImageUrl,
+                WarrantyPeriod = p.WarrantyPeriod,
+                CategoryId = p.CategoryId,
+                CategoryName = p.Category != null ? p.Category.Name : null,
+                InventoryQuantity = p.InventoryItem != null ? p.InventoryItem.Quantity : 0
+            })
+            .ToList();
+
+        return Ok(products);
+    }
+
     // Admin/Employee: Create new product
     [HttpPost]
     [Authorize(Policy = "EmployeeOrAdmin")]
