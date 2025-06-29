@@ -108,4 +108,26 @@ public class FeedbackController(AppDbContext context) : ControllerBase
 
         return Ok(feedbacks);
     }
+
+    // Public: get all feedbacks for a single product
+    [HttpGet("/api/product/{productId}/feedbacks")]
+    [AllowAnonymous]
+    public IActionResult GetFeedbacksForProduct(string productId)
+    {
+        var feedbacks = context.Feedbacks
+            .Include(f => f.Customer)
+            .Where(f => f.ProductId == productId)
+            .OrderByDescending(f => f.CreatedAt)
+            .Select(f => new FeedbackDTO
+            {
+                Id = f.Id,
+                CustomerName = f.Customer != null ? f.Customer.Name : string.Empty,
+                ProductId = f.ProductId,
+                Message = f.Message ?? string.Empty,
+                CreatedAt = f.CreatedAt
+            })
+            .ToList();
+
+        return Ok(new { feedbacks });
+    }
 }

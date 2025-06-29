@@ -18,8 +18,14 @@ public class ReturnOrReplacementController(AppDbContext context) : ControllerBas
         return int.TryParse(userIdStr, out var id) ? id : null;
     }
 
+    // Helper to get current user's email
+    private string? GetCurrentUserEmail()
+    {
+        return User.Identity?.Name;
+    }
+
     [HttpPost]
-    [Authorize(Roles = "Customer")] //only customer can create feedbacks
+    [Authorize(Roles = "Customer")] //only customer can create return|replacement
     public async Task<IActionResult> CreateReturn([FromBody] ReturnOrReplacementDTO dto)
     {
         var userId = GetUserId();
@@ -60,6 +66,34 @@ public class ReturnOrReplacementController(AppDbContext context) : ControllerBas
             .ToList();
 
         return Ok(returns);
+    }
+
+    // GET: api/returnorreplacement/my
+    [HttpGet("my")]
+    [Authorize(Roles = "Customer")]
+    public IActionResult GetMyReturnOrReplacement()
+    {
+        var email = GetCurrentUserEmail();
+        if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+        var customer = context.Customers.FirstOrDefault(c => c.Email == email);
+        if (customer == null) return Unauthorized();
+
+        // Join ReturnOrReplacements with Orders to ensure ownership
+        var myRequests = (from r in context.ReturnOrReplacements
+                         join o in context.Orders on r.OrderId equals o.Id
+                         where o.CustomerId == customer.Id
+                         select new ReturnOrReplacementDTO
+                         {
+                             Id = r.Id,
+                             OrderId = r.OrderId,
+                             ProductId = r.ProductId,
+                             RequestType = r.RequestType.ToString(),
+                             ApprovalStatus = r.ApprovalStatus.ToString(),
+                             RequestDate = r.RequestDate
+                         }).ToList();
+
+        return Ok(myRequests);
     }
 
     [HttpPut("{id}/status")]
