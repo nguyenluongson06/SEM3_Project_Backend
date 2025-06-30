@@ -84,11 +84,11 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
     {
         var admin = context.Admins.FirstOrDefault(a => a.Username == dto.Username);
         if (admin != null && VerifyPassword(dto.Password, admin.Password))
-            return Ok(new { Token = GenerateJwtToken(admin.Username, "Admin") });
+            return Ok(new { Token = GenerateJwtToken(admin.Username, "Admin"), Role = "Admin" });
 
         var emp = context.Employees.FirstOrDefault(e => e.Username == dto.Username);
         if (emp != null && VerifyPassword(dto.Password, emp.HashedPassword))
-            return Ok(new { Token = GenerateJwtToken(emp.Username, "Employee") });
+            return Ok(new { Token = GenerateJwtToken(emp.Username, "Employee"), Role = "Employee" });
 
         var cus = context.Customers.FirstOrDefault(c => c.Email == dto.Username);
         if (cus != null && !string.IsNullOrEmpty(cus.HashedPassword) && VerifyPassword(dto.Password, cus.HashedPassword))
