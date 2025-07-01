@@ -27,6 +27,9 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DockerConnection")));
 
+// Register PaypalService for DI
+builder.Services.AddScoped<SEM3_Project_Backend.Service.PaypalService>();
+
 // Role-based auth
 builder.Services.AddAuthorization(options =>
 {

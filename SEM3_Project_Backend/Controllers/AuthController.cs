@@ -259,4 +259,47 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+    
+    [HttpGet("user/info")]
+    [Authorize]
+    public IActionResult GetCurrentUserInfo()
+    {
+        var username = User.Identity?.Name;
+        if (string.IsNullOrEmpty(username))
+            return Unauthorized();
+
+        if (User.IsInRole("Customer"))
+        {
+            var customer = context.Customers.FirstOrDefault(c => c.Email == username);
+            if (customer == null) return NotFound();
+            return Ok(new
+            {
+                customer.Name,
+                customer.Email,
+                customer.PhoneNumber,
+                customer.Address
+            });
+        }
+        else if (User.IsInRole("Employee"))
+        {
+            var emp = context.Employees.FirstOrDefault(e => e.Username == username);
+            if (emp == null) return NotFound();
+            return Ok(new
+            {
+                emp.Name,
+                Username = emp.Username
+            });
+        }
+        else if (User.IsInRole("Admin"))
+        {
+            var admin = context.Admins.FirstOrDefault(a => a.Username == username);
+            if (admin == null) return NotFound();
+            return Ok(new
+            {
+                admin.Name,
+                Username = admin.Username
+            });
+        }
+        return Unauthorized();
+    }
 }
