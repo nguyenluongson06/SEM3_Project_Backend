@@ -78,6 +78,24 @@ public class PaymentController(AppDbContext context, PaypalService paypalService
         await context.SaveChangesAsync();
         return Ok(payment);
     }
+
+    [HttpDelete("{paymentId:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeletePayment(int paymentId)
+    {
+        var payment = await context.Payments.FindAsync(paymentId);
+        if (payment == null) return NotFound();
+        // Prevent deletion if payment is completed/cleared
+        if (payment.PaymentStatus == PaymentStatus.Cleared)
+            return BadRequest("Cannot delete a completed payment.");
+        // Prevent deletion if referenced in order (order must not exist or be deleted first)
+        var order = await context.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+        if (order != null)
+            return BadRequest("Cannot delete payment: referenced by order.");
+        context.Payments.Remove(payment);
+        await context.SaveChangesAsync();
+        return Ok();
+    }
 }
 
 public class StartPaymentRequest

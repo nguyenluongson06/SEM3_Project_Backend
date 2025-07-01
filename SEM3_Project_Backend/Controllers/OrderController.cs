@@ -113,7 +113,7 @@ public class OrderController(AppDbContext context) : ControllerBase
         if (customer == null) return Unauthorized();
 
         var orders = context.Orders
-            .Include(o => o.OrderItems)
+            .Include(o => (IEnumerable<OrderItem>)o.OrderItems!)
             .ThenInclude(oi => oi.Product)
             .Where(o => o.CustomerId == customer.Id)
             .ToList()
@@ -129,7 +129,7 @@ public class OrderController(AppDbContext context) : ControllerBase
     public IActionResult GetOrderById(int id)
     {
         var order = context.Orders
-            .Include(o => o.OrderItems)
+            .Include(o => (IEnumerable<OrderItem>)o.OrderItems!)
             .ThenInclude(oi => oi.Product)
             .FirstOrDefault(o => o.Id == id);
 
@@ -165,6 +165,12 @@ public class OrderController(AppDbContext context) : ControllerBase
             if (customer == null || order.CustomerId != customer.Id)
                 return Forbid();
         }
+
+        // Prevent deletion if referenced in payments, returns, or feedback
+        bool hasPayment = context.Payments.Any(p => p.OrderId == id);
+        bool hasReturn = context.ReturnOrReplacements.Any(r => r.OrderId == id);
+        if (hasPayment || hasReturn)
+            return BadRequest("Cannot delete order: referenced by payment, return, or feedback.");
 
         context.Orders.Remove(order);
         context.SaveChanges();

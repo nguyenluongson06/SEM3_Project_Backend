@@ -146,6 +146,15 @@ public class ProductController(AppDbContext context) : ControllerBase
         var product = context.Products.Include(p => p.InventoryItem).FirstOrDefault(p => p.Id == id);
         if (product == null) return NotFound();
 
+        // Prevent update if product is in any order, return, or feedback
+        bool inOrder = context.OrderItems.Any(oi => oi.ProductId == id);
+        bool inReturn = context.ReturnOrReplacements.Any(rr => rr.ProductId == id);
+        bool inFeedback = context.Feedbacks.Any(fb => fb.ProductId == id);
+        bool hasStock = product.InventoryItem != null && product.InventoryItem.Quantity > 0;
+
+        if (inOrder || inReturn || inFeedback || hasStock)
+            return BadRequest("Cannot modify product: referenced in order/return/feedback or stock not zero.");
+
         product.Name = dto.Name;
         product.Description = dto.Description;
         product.Price = dto.Price;
@@ -170,8 +179,17 @@ public class ProductController(AppDbContext context) : ControllerBase
     [Authorize(Policy = "EmployeeOrAdmin")]
     public IActionResult DeleteProduct(string id)
     {
-        var product = context.Products.FirstOrDefault(p => p.Id == id);
+        var product = context.Products.Include(p => p.InventoryItem).FirstOrDefault(p => p.Id == id);
         if (product == null) return NotFound();
+
+        bool inOrder = context.OrderItems.Any(oi => oi.ProductId == id);
+        bool inReturn = context.ReturnOrReplacements.Any(rr => rr.ProductId == id);
+        bool inFeedback = context.Feedbacks.Any(fb => fb.ProductId == id);
+        bool hasStock = product.InventoryItem != null && product.InventoryItem.Quantity > 0;
+
+        if (inOrder || inReturn || inFeedback || hasStock)
+            return BadRequest("Cannot delete product: referenced in order/return/feedback or stock not zero.");
+
         context.Products.Remove(product);
         context.SaveChanges();
         return Ok();

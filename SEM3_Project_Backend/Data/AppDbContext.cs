@@ -62,61 +62,54 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         
         //Relationships
         
-        // Customer → Orders
+        // Remove all .OnDelete(DeleteBehavior.Cascade) and use Restrict instead
         modelBuilder.Entity<Order>()
             .HasOne(o => o.Customer)
             .WithMany(c => c.Orders)
             .HasForeignKey(o => o.CustomerId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
-        // Order → OrderItems
         modelBuilder.Entity<OrderItem>()
             .HasOne(oi => oi.Order)
             .WithMany(o => o.OrderItems)
             .HasForeignKey(oi => oi.OrderId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
-        // OrderItem → Product
         modelBuilder.Entity<OrderItem>()
             .HasOne(oi => oi.Product)
             .WithMany(p => p.OrderItems)
             .HasForeignKey(oi => oi.ProductId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
-        // Order → Payment (one-to-one)
         modelBuilder.Entity<Payment>()
             .HasOne(p => p.Order)
             .WithOne(o => o.Payment)
             .HasForeignKey<Payment>(p => p.OrderId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
-        // ReturnOrReplacement → Order
         modelBuilder.Entity<ReturnOrReplacement>()
             .HasOne(rr => rr.Order)
             .WithMany(o => o.ReturnOrReplacements)
             .HasForeignKey(rr => rr.OrderId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
-        // ReturnOrReplacement → Product
         modelBuilder.Entity<ReturnOrReplacement>()
             .HasOne(rr => rr.Product)
             .WithMany(p => p.ReturnOrReplacements)
             .HasForeignKey(rr => rr.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Customer → Feedbacks
         modelBuilder.Entity<Feedback>()
             .HasOne(f => f.Customer)
             .WithMany(c => c.Feedbacks)
             .HasForeignKey(f => f.CustomerId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
-        //inventory item - product
         modelBuilder.Entity<InventoryItem>()
             .HasOne(ii => ii.Product)
             .WithOne(p => p.InventoryItem)
             .HasForeignKey<InventoryItem>(ii => ii.ProductId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
         
         //InventoryItem.ProductId has fixed length
         modelBuilder.Entity<InventoryItem>()
@@ -133,21 +126,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     }
 }
 
-//TODO: add more info to seed data to avoid random category assignment and/or random info
 public static class DbSeeder
 {
     public static void Seed(AppDbContext context)
     {
         // Only seed if DB is empty
+        string HashPassword(string password)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
+            return Convert.ToBase64String(bytes);
+        }
+
         if (!context.Admins.Any())
         {
-            string HashPassword(string password)
-            {
-                using var sha = System.Security.Cryptography.SHA256.Create();
-                var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
-                return Convert.ToBase64String(bytes);
-            }
-
             // Add admin
             context.Admins.Add(new Admin
             {
@@ -270,5 +262,116 @@ public static class DbSeeder
                 context.SaveChanges();
             }
         }
+
+        // Add more users (customers, employees, admins) created in the last 30 days
+        var random = new Random();
+        var now = DateTime.UtcNow;
+        var customerList = new List<Customer>();
+        var employeeList = new List<Employee>();
+        var adminList = new List<Admin>();
+        for (int i = 1; i <= 10; i++)
+        {
+            var createdAt = now.AddDays(-random.Next(0, 30));
+            var customer = new Customer
+            {
+                Name = $"Test Customer {i}",
+                Email = $"customer{i}@example.com",
+                HashedPassword = HashPassword($"customer{i}123"),
+                PhoneNumber = $"01234567{i:D2}",
+                Address = $"{i} Test St",
+                CreatedAt = createdAt,
+                ModifiedAt = createdAt
+            };
+            customerList.Add(customer);
+        }
+        for (int i = 1; i <= 3; i++)
+        {
+            var createdAt = now.AddDays(-random.Next(0, 30));
+            var employee = new Employee
+            {
+                Username = $"employee{i}",
+                HashedPassword = HashPassword($"employee{i}123"),
+                Name = $"Test Employee {i}",
+                CreatedAt = createdAt,
+                ModifiedAt = createdAt
+            };
+            employeeList.Add(employee);
+        }
+        for (int i = 1; i <= 2; i++)
+        {
+            var createdAt = now.AddDays(-random.Next(0, 30));
+            var admin = new Admin
+            {
+                Username = $"admin{i}",
+                Password = HashPassword($"admin{i}123"),
+                Name = $"Super Admin {i}",
+                CreatedAt = createdAt
+            };
+            adminList.Add(admin);
+        }
+        context.Customers.AddRange(customerList);
+        context.Employees.AddRange(employeeList);
+        context.Admins.AddRange(adminList);
+        context.SaveChanges();
+
+        // Add orders and payments for the last 30 days
+        var allCustomers = context.Customers.ToList();
+        var allProducts = context.Products.ToList();
+        var orderStatusList = new[] { DispatchStatus.Pending, DispatchStatus.Dispatched, DispatchStatus.Delivered, DispatchStatus.Cancelled };
+        var paymentStatusList = new[] { PaymentStatus.Cleared, PaymentStatus.Pending, PaymentStatus.Rejected };
+        for (int day = 0; day < 30; day++)
+        {
+            var orderDate = now.Date.AddDays(-day);
+            int ordersToday = random.Next(3, 6);
+            for (int o = 0; o < ordersToday; o++)
+            {
+                var customer = allCustomers[random.Next(allCustomers.Count)];
+                var order = new Order
+                {
+                    CustomerId = customer.Id,
+                    OrderDate = orderDate.AddHours(random.Next(0, 24)),
+                    CreatedAt = orderDate.AddHours(random.Next(0, 24)),
+                    UpdatedAt = orderDate.AddHours(random.Next(0, 24)),
+                    DeliveryAddress = $"{customer.Address}, City {random.Next(1, 5)}",
+                    DeliveryType = random.Next(0, 2) == 0 ? DeliveryType.Standard : DeliveryType.Express,
+                    DispatchStatus = orderStatusList[random.Next(orderStatusList.Length)],
+                    PaymentStatus = PaymentStatus.Cleared, // will be set by payment
+                    TotalAmount = 0,
+                    OrderItems = new List<OrderItem>()
+                };
+                int itemCount = random.Next(1, 4);
+                var usedProducts = new HashSet<string>();
+                for (int it = 0; it < itemCount; it++)
+                {
+                    var product = allProducts[random.Next(allProducts.Count)];
+                    if (!usedProducts.Add(product.Id)) continue;
+                    var quantity = random.Next(1, 5);
+                    order.OrderItems.Add(new OrderItem
+                    {
+                        ProductId = product.Id,
+                        Quantity = quantity,
+                        Price = product.Price,
+                        CreatedAt = order.OrderDate
+                    });
+                    order.TotalAmount += product.Price * quantity;
+                }
+                // Payment
+                var paymentStatus = paymentStatusList[random.Next(paymentStatusList.Length)];
+                var payment = new Payment
+                {
+                    Order = order,
+                    PaymentType = PaymentType.PayPal,
+                    PaymentStatus = paymentStatus,
+                    TransactionId = $"TXN{random.Next(100000, 999999)}",
+                    Amount = order.TotalAmount,
+                    PaymentDate = order.OrderDate
+                };
+                // Set order payment status to match payment
+                order.PaymentStatus = paymentStatus;
+                context.Orders.Add(order);
+                context.Payments.Add(payment);
+            }
+        }
+        context.SaveChanges();
     }
 }

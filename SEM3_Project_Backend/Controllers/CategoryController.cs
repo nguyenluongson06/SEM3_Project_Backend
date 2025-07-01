@@ -83,8 +83,17 @@ public class CategoryController(AppDbContext context) : ControllerBase
     [Authorize(Policy = "EmployeeOrAdmin")]
     public IActionResult UpdateCategory(int id, [FromBody] CategoryDTO dto)
     {
-        var cat = context.Categories.FirstOrDefault(c => c.Id == id);
+        var cat = context.Categories.Include(c => c.Products).FirstOrDefault(c => c.Id == id);
         if (cat == null) return NotFound();
+
+        // Prevent update if any product in category is referenced in order/return/feedback
+        var productIds = cat.Products?.Select(p => p.Id).ToList() ?? new List<string>();
+        bool anyProductInOrder = context.OrderItems.Any(oi => productIds.Contains(oi.ProductId));
+        bool anyProductInReturn = context.ReturnOrReplacements.Any(rr => productIds.Contains(rr.ProductId));
+        bool anyProductInFeedback = context.Feedbacks.Any(fb => productIds.Contains(fb.ProductId));
+
+        if (anyProductInOrder || anyProductInReturn || anyProductInFeedback)
+            return BadRequest("Cannot modify category: a product is referenced in order/return/feedback.");
 
         if (!string.IsNullOrWhiteSpace(dto.Name))
             cat.Name = dto.Name.Trim();
@@ -110,6 +119,7 @@ public class CategoryController(AppDbContext context) : ControllerBase
     {
         var cat = context.Categories.Include(c => c.Products).FirstOrDefault(c => c.Id == id);
         if (cat == null) return NotFound();
+
         if (cat.Products != null && cat.Products.Any())
             return BadRequest("Cannot delete category with products.");
 

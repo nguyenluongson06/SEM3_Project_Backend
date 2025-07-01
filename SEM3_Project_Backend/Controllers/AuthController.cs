@@ -182,6 +182,50 @@ public class AuthController(AppDbContext context, IConfiguration config) : Contr
         return Ok(admins);
     }
 
+    [HttpDelete("customer/{id}")]
+    [Authorize(Roles = "Admin")]
+    public IActionResult DeleteCustomer(int id)
+    {
+        var customer = context.Customers.FirstOrDefault(c => c.Id == id);
+        if (customer == null) return NotFound();
+        // Prevent deletion if referenced in orders, feedback, returns
+        bool hasOrders = context.Orders.Any(o => o.CustomerId == id);
+        bool hasFeedback = context.Feedbacks.Any(f => f.CustomerId == id);
+        bool hasReturns = context.ReturnOrReplacements.Any(r => r.Order != null && r.Order.CustomerId == id);
+        if (hasOrders || hasFeedback || hasReturns)
+            return BadRequest("Cannot delete customer: referenced by orders, feedback, or returns.");
+        context.Customers.Remove(customer);
+        context.SaveChanges();
+        return Ok();
+    }
+
+    [HttpDelete("employee/{id}")]
+    [Authorize(Roles = "Admin")]
+    public IActionResult DeleteEmployee(int id)
+    {
+        var emp = context.Employees.FirstOrDefault(e => e.Id == id);
+        if (emp == null) return NotFound();
+        // Prevent deletion if referenced in orders (if any future logic), or other entities
+        // (Assume employees are not referenced elsewhere for now)
+        context.Employees.Remove(emp);
+        context.SaveChanges();
+        return Ok();
+    }
+
+    [HttpDelete("admin/{id}")]
+    [Authorize(Roles = "Admin")]
+    public IActionResult DeleteAdmin(int id)
+    {
+        var admin = context.Admins.FirstOrDefault(a => a.Id == id);
+        if (admin == null) return NotFound();
+        // Prevent deletion of last admin
+        if (context.Admins.Count() <= 1)
+            return BadRequest("Cannot delete the last admin.");
+        context.Admins.Remove(admin);
+        context.SaveChanges();
+        return Ok();
+    }
+
     private static string HashPassword(string password)
     {
         using var sha = SHA256.Create();
