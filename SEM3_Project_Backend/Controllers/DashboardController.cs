@@ -14,13 +14,17 @@ public class DashboardController(AppDbContext context) : ControllerBase
 {
     // GET /api/dashboard/summary?from=2025-06-01&to=2025-06-30
     [HttpGet("summary")]
-    public IActionResult GetSummary([FromQuery] DateTime? from, [FromQuery] DateTime? to)
+    public IActionResult GetSummary([FromQuery] string? range)
     {
-        var end = to ?? DateTime.UtcNow;
-        var start = from ?? end.AddDays(-30);
+        int days = 30;
+        if (!string.IsNullOrEmpty(range) && range.EndsWith("d") && int.TryParse(range.TrimEnd('d'), out var d))
+            days = d;
+
+        var end = DateTime.UtcNow;
+        var start = end.AddDays(-days + 1);
 
         var orders = context.Orders
-            .Where(o => o.CreatedAt >= start && o.CreatedAt <= end && o.PaymentStatus == PaymentStatus.Cleared);
+            .Where(o => o.OrderDate >= start && o.OrderDate <= end && o.PaymentStatus == PaymentStatus.Cleared);
 
         var totalRevenue = orders.Sum(o => (decimal?)o.TotalAmount) ?? 0;
         var orderCount = orders.Count();

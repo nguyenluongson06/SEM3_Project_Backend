@@ -6,12 +6,14 @@ using SEM3_Project_Backend.DTOs;
 using SEM3_Project_Backend.Model;
 using System.Security.Claims;
 
+
 namespace SEM3_Project_Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class OrderController(AppDbContext context) : ControllerBase
 {
+
     // Helper to get user email from JWT
     private string? GetCurrentUserEmail()
     {
@@ -113,8 +115,7 @@ public class OrderController(AppDbContext context) : ControllerBase
         if (customer == null) return Unauthorized();
 
         var orders = context.Orders
-            .Include(o => (IEnumerable<OrderItem>)o.OrderItems!)
-            .ThenInclude(oi => oi.Product)
+            .Include(o => o.OrderItems)
             .Where(o => o.CustomerId == customer.Id)
             .ToList()
             .Select(ToOrderDTO)
@@ -129,8 +130,7 @@ public class OrderController(AppDbContext context) : ControllerBase
     public IActionResult GetOrderById(int id)
     {
         var order = context.Orders
-            .Include(o => (IEnumerable<OrderItem>)o.OrderItems!)
-            .ThenInclude(oi => oi.Product)
+            .Include(o => o.OrderItems)
             .FirstOrDefault(o => o.Id == id);
 
         if (order == null) return NotFound();
@@ -227,6 +227,19 @@ public class OrderController(AppDbContext context) : ControllerBase
         order.UpdatedAt = DateTime.UtcNow;
         context.SaveChanges();
         return Ok(ToOrderDTO(order));
+    }
+
+    // Get all orders (Admin/Employee only)
+    [HttpGet]
+    [Authorize(Policy = "EmployeeOrAdmin")]
+    public IActionResult GetAllOrders()
+    {
+        var orders = context.Orders
+            .Include(o => o.OrderItems)
+            .ToList()
+            .Select(ToOrderDTO)
+            .ToList();
+        return Ok(orders);
     }
 
     // Helper: Map Order to OrderDTO

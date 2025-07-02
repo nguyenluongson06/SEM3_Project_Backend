@@ -32,7 +32,8 @@ public class PaymentController(AppDbContext context, PaypalService paypalService
         context.Payments.Add(payment);
         await context.SaveChangesAsync();
 
-        var payUrl = await paypalService.GenerateUrl(order, payment);
+        // Pass the URLs from the DTO
+        var payUrl = await paypalService.GenerateUrl(order, payment, dto.ReturnUrl, dto.CancelUrl);
         return Ok(new { payUrl });
     }
 
@@ -102,6 +103,8 @@ public class StartPaymentRequest
 {
     public int OrderId { get; set; }
     public float Amount { get; set; }
+    public string? ReturnUrl { get; set; }
+    public string? CancelUrl { get; set; }
 }
 
 public class PayPalCallbackRequest

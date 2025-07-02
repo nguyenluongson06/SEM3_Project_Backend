@@ -191,17 +191,27 @@ public static class DbSeeder
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            // Add missing categories
-            var defaultCatImg = "https://d2opxh93rbxzdn.cloudfront.net/original/2X/4/40cfa8ca1f24ac29cfebcb1460b5cafb213b6105.png";
+            // Add missing categories with specific images
+            var categoryImages = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "ceramics", "https://www.gomnghethuat.com/wp-content/uploads/Thap-Gom-Nghe-Thuat.jpg" },
+                { "art", "https://bantranh.com/wp-content/uploads/2022/07/tranh-phong-canh-bien1.jpg" },
+                { "bags", "https://www.eovietnam.com/wp-content/uploads/2021/09/unnamed-6.jpg" },
+                { "stationery", "https://down-vn.img.susercontent.com/file/sg-11134201-7rd5a-lvb2u3pnqgyiba@resize_w900_nl.webp" },
+                { "accessories", "https://down-vn.img.susercontent.com/file/sg-11134201-7rbkm-lpl98xyicezff7@resize_w900_nl.webp" },
+                { "cosmetics", "https://down-vn.img.susercontent.com/file/ef1f336ecc6f97b790d5aae9916dcb72" }
+            };
             var existingCategories = context.Categories.ToList();
             foreach (var catName in csvCategories)
             {
                 if (!existingCategories.Any(c => c.Name != null && c.Name.Equals(catName, StringComparison.OrdinalIgnoreCase)))
                 {
+                    var lowerCat = catName.ToLowerInvariant();
+                    var imgUrl = categoryImages.ContainsKey(lowerCat) ? categoryImages[lowerCat] : "https://d2opxh93rbxzdn.cloudfront.net/original/2X/4/40cfa8ca1f24ac29cfebcb1460b5cafb213b6105.png";
                     var newCat = new Category
                     {
                         Name = catName,
-                        ImageUrl = defaultCatImg,
+                        ImageUrl = imgUrl,
                         CreatedAt = DateTime.UtcNow,
                         ModifiedAt = DateTime.UtcNow
                     };
